@@ -12,6 +12,10 @@ import time
 import asyncio
 import subprocess
 
+# Set UTF-8 encoding
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -22,6 +26,13 @@ LAST_RESPONSE_FILE = os.path.join(BRIDGE_DIR, 'last_response.txt')
 
 # Create bridge dir if not exists
 os.makedirs(BRIDGE_DIR, exist_ok=True)
+
+def log(msg):
+    """Safe print with Unicode handling"""
+    try:
+        print(msg)
+    except:
+        print(str(msg))
 
 def save_last_response(text: str):
     """Save last response"""
@@ -112,6 +123,8 @@ def process_inbox():
             outbox = []
     
     processed = 0
+    pending_for_ai = 0
+    
     for msg in inbox:
         if not msg.get('processed', False):
             text = msg.get('text', '')
@@ -119,6 +132,7 @@ def process_inbox():
             # Get auto response
             auto_reply = get_auto_response(text)
             if auto_reply:
+                # Simple query - auto respond
                 outbox.append({
                     'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S'),
                     'chat_id': msg['chat_id'],
@@ -129,7 +143,14 @@ def process_inbox():
                 msg['processed'] = True
                 save_last_response(auto_reply)
                 processed += 1
-                print(f"[PROCESS] Auto-reply to: {text[:50]}...")
+                log(f"[AUTO] Query processed")
+            else:
+                # Complex query - mark for OpenCode processing
+                pending_for_ai += 1
+                log(f"[PENDING] Complex query waiting for OpenCode AI")
+    
+    if pending_for_ai > 0:
+        log(f"[WAIT] {pending_for_ai} messages need OpenCode AI processing")
     
     # Save files
     with open(INBOX_FILE, 'w', encoding='utf-8') as f:
@@ -141,12 +162,12 @@ def process_inbox():
     return processed
 
 def main():
-    print("=" * 50)
-    print("  Telegram Queue Processor")
-    print("=" * 50)
-    print(f"\nBridge Dir: {BRIDGE_DIR}")
-    print("\nStarting continuous inbox processor...")
-    print("Press Ctrl+C to stop\n")
+    log("=" * 50)
+    log("  Telegram Queue Processor")
+    log("=" * 50)
+    log(f"\nBridge Dir: {BRIDGE_DIR}")
+    log("\nStarting continuous inbox processor...")
+    log("Press Ctrl+C to stop\n")
     
     last_count = -1
     
@@ -154,7 +175,7 @@ def main():
         while True:
             count = process_inbox()
             if count > 0:
-                print(f"[OK] Processed {count} messages")
+                log(f"[OK] Processed {count} messages")
             
             # Check if no new messages for a while
             if os.path.exists(INBOX_FILE):
@@ -163,7 +184,7 @@ def main():
                         inbox = json.loads(f.read().strip() or "[]")
                     pending = len([m for m in inbox if not m.get('processed', False)])
                     if pending != last_count:
-                        print(f"[STATUS] {pending} messages pending")
+                        log(f"[STATUS] {pending} pending (need OpenCode AI)")
                         last_count = pending
                 except:
                     pass
@@ -171,8 +192,8 @@ def main():
             time.sleep(2)  # Check every 2 seconds
     
     except KeyboardInterrupt:
-        print("\n\nStopping processor...")
-        print("Done!")
+        log("\n\nStopping processor...")
+        log("Done!")
 
 if __name__ == "__main__":
     main()

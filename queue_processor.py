@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 Telegram Queue Processor
-Real file monitoring - processes inbox immediately on change
-No external dependencies needed
+Real file monitoring with proper file locking
 """
 
 import os
@@ -11,6 +10,7 @@ import json
 import time
 import subprocess
 import threading
+import fcntl
 
 BRIDGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bridge_data')
 INBOX_FILE = os.path.join(BRIDGE_DIR, 'inbox.json')
@@ -28,6 +28,43 @@ def save_last_response(text: str):
             f.write(text)
     except:
         pass
+
+def read_json_safe(filepath, default=[]):
+    """Read JSON file with error handling"""
+    try:
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:
+                    return json.loads(content)
+    except (json.JSONDecodeError, ValueError) as e:
+        log(f"READ ERROR {filepath}: {e}")
+    except Exception as e:
+        log(f"READ ERROR {filepath}: {e}")
+    return default
+
+def write_json_safe(filepath, data):
+    """Write JSON file with error handling"""
+    try:
+        # Write to temp file first
+        temp_file = filepath + '.tmp'
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        # Atomic rename
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        os.rename(temp_file, filepath)
+        return True
+    except Exception as e:
+        log(f"WRITE ERROR {filepath}: {e}")
+        # Try to clean up temp file
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except:
+            pass
+        return False
 
 def run_command(cmd: str) -> str:
     try:
@@ -73,123 +110,111 @@ def get_auto_response(text: str) -> str:
     return None
 
 def process_inbox():
-    try:
-        if not os.path.exists(INBOX_FILE):
-            return 0, 0
-        
-        with open(INBOX_FILE, 'r', encoding='utf-8') as f:
-            content = f.read().strip()
-            inbox = json.loads(content) if content else []
-        
-        outbox = []
-        if os.path.exists(OUTBOX_FILE):
-            try:
-                with open(OUTBOX_FILE, 'r', encoding='utf-8') as f:
-                    outbox = json.loads(f.read().strip() or "[]")
-            except:
-                outbox = []
-        
-        processed = 0
-        pending = 0
-        
-        for msg in inbox:
-            if not msg.get('processed', False):
-                text = msg.get('text', '')
-                auto_reply = get_auto_response(text)
-                
-                if auto_reply:
-                    outbox.append({
-                        'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S'),
-                        'chat_id': msg['chat_id'],
-                        'reply_to_message_id': msg['message_id'],
-                        'text': auto_reply,
-                        'sent': False
-                    })
-                    msg['processed'] = True
-                    save_last_response(auto_reply)
-                    processed += 1
-                    log(f"AUTO: {text[:40]}...")
-                else:
-                    pending += 1
-        
-        with open(INBOX_FILE, 'w', encoding='utf-8') as f:
-            json.dump(inbox, f, ensure_ascii=False, indent=2)
-        
-        with open(OUTBOX_FILE, 'w', encoding='utf-8') as f:
-            json.dump(outbox, f, ensure_ascii=False, indent=2)
-        
-        return processed, pending
-        
-    except Exception as e:
-        log(f"ERROR: {e}")
+    """Process inbox and add responses to outbox"""
+    inbox = read_json_safe(INBOX_FILE)
+    outbox = read_json_safe(OUTBOX_FILE)
+    
+    if not inbox:
         return 0, 0
+    
+    processed = 0
+    pending = 0
+    changed = False
+    
+    for msg in inbox:
+        if not msg.get('processed', False):
+            text = msg.get('text', '')
+            auto_reply = get_auto_response(text)
+            
+            if auto_reply:
+                outbox.append({
+                    'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S'),
+                    'chat_id': msg['chat_id'],
+                    'reply_to_message_id': msg['message_id'],
+                    'text': auto_reply,
+                    'sent': False
+                })
+                msg['processed'] = True
+                save_last_response(auto_reply)
+                processed += 1
+                changed = True
+                log(f"AUTO: {text[:40]}...")
+            else:
+                pending += 1
+    
+    if changed:
+        write_json_safe(INBOX_FILE, inbox)
+        write_json_safe(OUTBOX_FILE, outbox)
+        log(f"DONE: {processed} auto-replied, {pending} pending")
+    elif pending > 0:
+        log(f"WAIT: {pending} messages need OpenCode AI")
+    
+    return processed, pending
 
 class FileMonitor:
     def __init__(self):
-        self.last_inbox_mtime = 0
-        self.last_inbox_size = 0
+        self.last_mtime = 0
+        self.last_size = 0
         self.running = True
-        self.thread = threading.Thread(target=self._monitor)
-        self.thread.daemon = True
+        self.processing = False
         
     def start(self):
-        log("START: Starting file monitor")
-        # Initial state
+        log("START: File monitor initializing...")
         if os.path.exists(INBOX_FILE):
             stat = os.stat(INBOX_FILE)
-            self.last_inbox_mtime = stat.st_mtime
-            self.last_inbox_size = stat.st_size
-        
+            self.last_mtime = stat.st_mtime
+            self.last_size = stat.st_size
+        self.thread = threading.Thread(target=self._monitor)
+        self.thread.daemon = True
         self.thread.start()
-        log("START: Monitor thread running")
+        log("START: Monitor active")
         
     def _monitor(self):
-        log("MONITOR: Watching for file changes...")
+        log("MONITOR: Watching inbox file...")
         while self.running:
             try:
                 if os.path.exists(INBOX_FILE):
                     stat = os.stat(INBOX_FILE)
                     
-                    # Check for changes
-                    if stat.st_mtime != self.last_inbox_mtime or stat.st_size != self.last_inbox_size:
-                        log(f"CHANGE: Inbox modified!")
-                        self.last_inbox_mtime = stat.st_mtime
-                        self.last_inbox_size = stat.st_size
-                        
-                        # Wait a bit for file to finish writing
-                        time.sleep(0.3)
-                        
-                        # Process
-                        processed, pending = process_inbox()
-                        if processed > 0:
-                            log(f"DONE: Processed {processed} messages")
-                        if pending > 0:
-                            log(f"WAIT: {pending} need OpenCode AI")
+                    # Detect change
+                    if stat.st_mtime != self.last_mtime or stat.st_size != self.last_size:
+                        if not self.processing:
+                            log("CHANGE: Inbox file modified!")
+                            self.last_mtime = stat.st_mtime
+                            self.last_size = stat.st_size
+                            
+                            # Process with lock
+                            self.processing = True
+                            time.sleep(0.2)  # Wait for write to complete
+                            process_inbox()
+                            self.processing = False
             except Exception as e:
-                log(f"ERROR: {e}")
+                log(f"MONITOR ERROR: {e}")
+                time.sleep(1)
             
-            time.sleep(0.5)  # Check every 0.5 seconds
+            time.sleep(0.3)  # Check every 300ms
             
         log("MONITOR: Stopped")
     
     def stop(self):
         self.running = False
-        self.thread.join(timeout=2)
+        try:
+            self.thread.join(timeout=2)
+        except:
+            pass
 
 def main():
     log("=" * 50)
-    log("  Telegram Queue Processor - FILE MONITOR")
+    log("  Telegram Queue Processor - ACTIVE")
     log("=" * 50)
     log(f"")
     log(f"Bridge Dir: {BRIDGE_DIR}")
-    log(f"Inbox: {INBOX_FILE}")
     log(f"")
-    log("START: Initializing...")
     
     monitor = FileMonitor()
     monitor.start()
     
-    log("READY: Watching for messages...")
+    log("READY: Monitoring for messages...")
     log("Press Ctrl+C to stop")
     log("")
     

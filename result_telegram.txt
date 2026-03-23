@@ -1,0 +1,108 @@
+=== Search Results ===
+Keyword: "telegram" | Mode: all
+Path: C:\dev
+
+Files scanned: 15000+
+Matches found: 32
+
+--- Matches in: C:\dev\gemini_cli_telemgram\ ---
+
+1. bot.py (line 17)
+   from telegram import Update
+
+2. bot.py (line 18)
+   from telegram.constants import ParseMode
+
+3. bot.py (line 19)
+   from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+
+4. bot.py (line 24)
+   TELEGRAM_BOT_TOKEN = "8367765800:AAHPQQJgu6yMsbVQYxSA7J6CG5FkOtNEQII"
+
+5. bot.py (line 628)
+   app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+
+6. bot.py (line 630)
+   from telegram import BotCommand
+
+7. bot.py (line 688)
+   app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).post_init(post_init).build()
+
+8. doc_migrate/task.md (line 1)
+   # Tasks for Telegram Bot Bridge
+
+9. doc_migrate/task.md (line 3)
+   - [x] Setup Python project and install dependencies (`python-telegram-bot`, `google-generativeai`, `psutil`)
+
+10. doc_migrate/task.md (line 14)
+    - [x] Edit code via Telegram
+
+11. doc_migrate/task_gemini.md (line 3)
+    - [x] Setup Python project and install dependencies (`python-telegram-bot`, `google-generativeai`, `psutil`)
+
+12. doc_migrate/task_gemini.md (line 14)
+    - [x] Edit code via Telegram
+
+13. multiple_bots_explanation.html (line 46)
+    Telegram จะส่งคำสั่งนั้นให้เฉพาะ Bot ที่มี Username ตรงกันเท่านั้น
+
+14. multiple_bots_explanation.html (line 60)
+    <strong>คำเตือน:</strong> โดยปกติ Telegram ไม่อนุญาตให้ Bot คุยกับ Bot ด้วยกันเอง เพื่อป้องกันการเกิด Infinite Loop (Bot A ตอบ Bot B แล้ว Bot B ตอบกลั
+
+15. README.md (line 1)
+    # Telegram Bot Bridge
+
+16. README.md (line 3)
+    A bridge between your mobile device (via Telegram) and your computer, powered by Google Gemini.
+
+17. README.md (line 31)
+    - `TELEGRAM_BOT_TOKEN`: Set your bot token from [@BotFather](https://t.me/botfather).
+
+18. README.md (line 32)
+    - `ALLOWED_USER_ID`: Set your Telegram ID (use `/start` while the bot is running to find it).
+
+19. README_INSTRUCTION.txt (line 1)
+    # How to Test Your Telegram Bot Bridge
+
+20. README_INSTRUCTION.txt (line 7)
+    - In Telegram, send `/start`.
+
+21. requirement.md (line 1)
+    ช่วยเขียน Python Script สำหรับสร้าง Telegram Bot ที่ทำหน้าที่เป็น Bridge ระหว่างมือถือกับ Notebook ของฉัน โดยมีข้อกำหนดดังนี้:
+
+22. requirement.md (line 11)
+    ฟังก์ชันจัดการไฟล์: มีคำสั่ง /list เพื่อดูรายชื่อไฟล์ และ /read \[ชื่อไฟล์] เพื่ออ่านโค้ดในเครื่องมาแสดงบน Telegram
+
+23. requirement.md (line 19)
+    สไตล์โค้ด: ขอแบบสั้น กระชับ (Clean \& Minimal) และใช้ Library python-telegram-bot กับ google-generativeai"
+
+24. requirement.md (line 35)
+    สั่ง งานเช่นแก้ไขโค้ดได้ ผ่าน telegram เลย
+
+25. requirements.txt (line 1)
+    python-telegram-bot
+
+26. test_telegram.py (filename)
+
+27. test_telegram.py (line 2)
+    from telegram import Bot
+
+28. test_telegram.py (line 5)
+    TELEGRAM_BOT_TOKEN = "8367765800:AAHPQQJgu6yMsbVQYxSA7J6CG5FkOtNEQII"
+
+29. test_telegram.py (line 10)
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
+30. test_telegram.py (line 12)
+    await bot.send_message(chat_id=ALLOWED_USER_ID, text="🚀 Proof of Concept: Python can successfully send messages to this Telegram Chat!")
+
+--- Matches in: C:\dev\gemini_cli_telemgram_test\ ---
+
+31. memory_book/2026-02-09.md (line 20)
+    [01:04:17] (AI): User has been working on setting up Gemini CLI + Telegram since around 7 PM (19:00 ICT) yesterday, until now, past 1 AM (01:00 ICT).
+
+32. memory_book/2026-02-09.md (line 21)
+    [01:04:17] (AI): User initially considered installing OpenClaw but then wondered about the difference compared to their current Gemini CLI + Telegram
+
+===========================================
+Search completed: 2026-03-23

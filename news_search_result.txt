@@ -1,0 +1,18 @@
+ผลการค้นหาคำว่า "news" ในโฟลเดอร์ P51_make_ai_bot
+พบ 230 รายการ
+
+ไฟล์หลักที่เกี่ยวข้อง:
+1. stock_news.txt - ข่าวหุ้นไทย
+2. stock_news.mp3 - ไฟล์เสียงข่าวหุ้น
+3. war_news.txt - ข่าวสงคราม
+4. tools/custom/stock_news.py - สคริปต์ดึงข่าวหุ้น
+5. tools/custom/war_news.py - สคริปต์ดึงข่าวสงคราม
+6. tools/sanook/ - เครื่องมือดึงข่าวจาก Sanook
+7. telegram_siliconflow_ai2.py - บอท Telegram หลัก
+8. thai-tts-v2/ - ระบบแปลงข้อความเป็นเสียง
+
+คำสั่งบอทที่เกี่ยวข้อง:
+- /news ดึงข่าวเด่นจาก Sanook
+- /stocknews ข่าวหุ้นไทย
+- /stocknewstts ข่าวหุ้นไทยอ่านเสียง
+- /warnews ข่าวสงคราม

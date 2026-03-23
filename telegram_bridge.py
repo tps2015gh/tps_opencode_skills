@@ -103,10 +103,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Hi!\n\n"
         "I am Telegram Bridge for OpenCode Agent\n\n"
         "Commands:\n"
-        "/ai <message> - Talk directly to AI\n"
+        "/ai <message> - Talk to AI\n"
+        "/aia <message> - Talk + audio reply\n"
+        "/readx - Read last reply as audio\n"
         "/start - Start\n"
         "/status - Check status\n"
-        "/pending - View pending messages\n"
         "/clear - Clear data"
     )
 
@@ -172,22 +173,49 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "How to use:\n\n"
-        "/ai <message> - Talk directly to OpenCode AI Agent\n\n"
-        "Or send any message and run /telegram in OpenCode"
+        "Commands:\n\n"
+        "/ai <message> - Forward to OpenCode Agent\n"
+        "/aia <message> - Forward with audio\n"
+        "/readx - Read last reply as audio\n\n"
+        "Auto-commands (instant):\n"
+        "git status - Show git status\n"
+        "git log - Show recent commits\n"
+        "git branch - Show branches\n"
+        "cmd <command> - Run any command\n\n"
+        "Simple chat:\n"
+        "hello, ok, thanks, time, date"
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle all messages, save to inbox"""
+    """Handle all messages"""
     user = update.effective_user
-    text = update.message.text
+    text = update.message.text.strip()
     
-    add_to_inbox(
-        chat_id=update.message.chat_id,
-        message_id=update.message.message_id,
-        user_id=user.id,
-        username=user.username or user.first_name,
-        text=text
+    # Check if it's a command (starts with /)
+    if text.startswith('/'):
+        # Treat as /ai command
+        add_to_inbox(
+            chat_id=update.message.chat_id,
+            message_id=update.message.message_id,
+            user_id=user.id,
+            username=user.username or user.first_name,
+            text=f"[/ai] {text}"
+        )
+    else:
+        # Regular message - add to inbox
+        add_to_inbox(
+            chat_id=update.message.chat_id,
+            message_id=update.message.message_id,
+            user_id=user.id,
+            username=user.username or user.first_name,
+            text=text
+        )
+    
+    await update.message.reply_text(
+        f"Message received!\n\n"
+        f"From: @{user.username or user.first_name}\n"
+        f"Message: {text[:100]}{'...' if len(text) > 100 else ''}\n\n"
+        f"OpenCode Agent will reply..."
     )
     
     await update.message.reply_text(
@@ -198,7 +226,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /ai command - save to inbox for OpenCode Agent to process immediately"""
+    """Handle /ai command - reply immediately"""
     user = update.effective_user
     
     if not context.args:
@@ -210,6 +238,7 @@ async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text = " ".join(context.args)
     
+    # Save to inbox for OpenCode
     add_to_inbox(
         chat_id=update.message.chat_id,
         message_id=update.message.message_id,
@@ -218,26 +247,225 @@ async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=f"[/ai] {text}"
     )
     
+    # REPLY IMMEDIATELY
     await update.message.reply_text(
-        f"Forwarded to OpenCode Agent...\n\n"
-        f"Message: {text[:100]}{'...' if len(text) > 100 else ''}"
+        f"Message received!\n\n"
+        f"From: @{user.username or user.first_name}\n"
+        f"Message: {text[:100]}{'...' if len(text) > 100 else ''}\n\n"
+        f"OpenCode Agent will reply soon..."
     )
+
+async def aia_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /aia command - reply immediately with audio note"""
+    user = update.effective_user
+    
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: /aia <your message>\n\n"
+            "Example: /aia Hello, how are you?\n\n"
+            "This will reply with both text and audio."
+        )
+        return
+    
+    text = " ".join(context.args)
+    
+    # Save to inbox for OpenCode
+    add_to_inbox(
+        chat_id=update.message.chat_id,
+        message_id=update.message.message_id,
+        user_id=user.id,
+        username=user.username or user.first_name,
+        text=f"[/aia] {text}"
+    )
+    
+    # REPLY IMMEDIATELY
+    await update.message.reply_text(
+        f"Message received (audio mode)!\n\n"
+        f"From: @{user.username or user.first_name}\n"
+        f"Message: {text[:100]}{'...' if len(text) > 100 else ''}\n\n"
+        f"OpenCode Agent will reply with text + audio..."
+    )
+
+async def readx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /readx command - read last AI response as TTS"""
+    user = update.effective_user
+    
+    last_response_file = os.path.join(BRIDGE_DIR, 'last_response.txt')
+    
+    if not os.path.exists(last_response_file):
+        await update.message.reply_text(
+            "No last response to read.\n\n"
+            "Use /ai <message> first, then /readx to hear the reply."
+        )
+        return
+    
+    try:
+        with open(last_response_file, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+        
+        if not content:
+            await update.message.reply_text("Last response is empty.")
+            return
+        
+        # Save to TTS folder
+        tts_input = os.path.join(BRIDGE_DIR, 'tts_input.txt')
+        tts_output = os.path.join(BRIDGE_DIR, 'tts_output.mp3')
+        
+        with open(tts_input, 'w', encoding='utf-8') as f:
+            f.write(content[:2000])  # Limit for TTS
+        
+        await update.message.reply_text("Generating audio...")
+        
+        # Generate TTS
+        try:
+            import edge_tts
+            asyncio.run(edge_tts.Communicate(content[:2000], "th-TH-PremwadeeNeural").save(tts_output))
+            
+            with open(tts_output, 'rb') as audio:
+                await update.message.reply_voice(audio, caption="Read: " + content[:100] + "...")
+            
+            # Clean up
+            os.remove(tts_input)
+            os.remove(tts_output)
+        except ImportError:
+            await update.message.reply_text("TTS not available. Install: pip install edge-tts")
+        except Exception as e:
+            await update.message.reply_text(f"TTS error: {e}")
+            
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
 
 async def post_init(application: Application):
     await application.bot.set_my_commands([
         BotCommand("start", "Start"),
         BotCommand("ai", "Talk to AI"),
+        BotCommand("aia", "Talk + Audio"),
+        BotCommand("readx", "Read last reply"),
         BotCommand("status", "Check status"),
         BotCommand("pending", "View pending"),
         BotCommand("help", "Help"),
         BotCommand("clear", "Clear data"),
     ])
 
+# ─── Command Executor ───────────────────────────────────────────────────────
+import subprocess
+
+def run_command(cmd: str) -> str:
+    """Run a shell command and return output"""
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, 
+            text=True, timeout=30,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        return result.stdout.strip() or result.stderr.strip() or "Done!"
+    except Exception as e:
+        return f"Error: {e}"
+
+def get_auto_response(text: str) -> str:
+    """Auto-responses including command execution"""
+    text_lower = text.lower().strip()
+    
+    # Simple greetings
+    if text_lower in ['ok', 'okay', 'ครับ', 'ขอบคุณ', 'thanks', 'thank you']:
+        return "OK!"
+    
+    # Time
+    if 'time' in text_lower or 'เวลา' in text_lower or 'กี่โมง' in text_lower:
+        from datetime import datetime
+        return f"Current time: {datetime.now().strftime('%H:%M')} ICT"
+    
+    # Date
+    if 'date' in text_lower or 'วันที่' in text_lower or 'today' in text_lower:
+        from datetime import datetime
+        return f"Today: {datetime.now().strftime('%d/%m/%Y')}"
+    
+    # Status
+    if 'status' in text_lower or 'สถานะ' in text_lower:
+        return "System is running normally."
+    
+    # Hello
+    if 'hello' in text_lower or 'hi' in text_lower or 'สวัสดี' in text_lower:
+        return "Hello! I'm here. What can I help you with?"
+    
+    # Help
+    if 'help' in text_lower or 'ช่วย' in text_lower:
+        return "Commands:\n/ai <message> - Forward to AI\n/git <cmd> - Run git command\n/cmd <command> - Run any command"
+    
+    # Git commands
+    if text_lower.startswith('git '):
+        cmd = text_lower[4:]
+        if 'status' in cmd:
+            return f"```\n{run_command('git status')}\n```"
+        if 'log' in cmd:
+            return f"```\n{run_command('git log --oneline -5')}\n```"
+        if 'branch' in cmd:
+            return f"```\n{run_command('git branch -a')}\n```"
+        if 'diff' in cmd:
+            return f"```\n{run_command('git diff')}\n```"
+        return f"Running: git {cmd}\n```\n{run_command('git ' + cmd)}\n```"
+    
+    # System commands
+    if text_lower.startswith('cmd '):
+        cmd = text_lower[4:]
+        return f"```\n{run_command(cmd)}\n```"
+    
+    return None
+
+# ─── Auto-Inbox Processor ───────────────────────────────────────────────────
+async def inbox_processor(app):
+    """Periodically check inbox and auto-respond"""
+    print("[AUTO] Starting auto-inbox processor...")
+    while True:
+        try:
+            if os.path.exists(INBOX_FILE):
+                try:
+                    with open(INBOX_FILE, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        if not content:
+                            inbox = []
+                        else:
+                            inbox = json.loads(content)
+                except (json.JSONDecodeError, ValueError):
+                    inbox = []
+                
+                changed = False
+                for msg in inbox:
+                    if not msg.get('processed', False):
+                        text = msg.get('text', '')
+                        
+                        # Get auto-response
+                        auto_reply = get_auto_response(text)
+                        if auto_reply:
+                            try:
+                                await app.bot.send_message(
+                                    chat_id=msg['chat_id'],
+                                    text=auto_reply,
+                                    reply_to_message_id=msg.get('message_id')
+                                )
+                                msg['processed'] = True
+                                changed = True
+                                print(f"[AUTO] Replied to @{msg.get('username')}: {text[:50]}...")
+                            except Exception as e:
+                                print(f"[AUTO] Send error: {e}")
+                
+                if changed:
+                    with open(INBOX_FILE, 'w', encoding='utf-8') as f:
+                        json.dump(inbox, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[AUTO] Process error: {e}")
+        
+        await asyncio.sleep(1)
+
 # ─── Periodic Check for Outbox ──────────────────────────────────────────────
 async def outbox_checker(app):
     """Periodically check outbox and send pending replies"""
+    last_check = 0
     while True:
         try:
+            current_time = asyncio.get_event_loop().time()
+            interval = 0.5 if current_time - last_check < 5 else 2
+            
             if os.path.exists(OUTBOX_FILE):
                 try:
                     with open(OUTBOX_FILE, 'r', encoding='utf-8') as f:
@@ -260,6 +488,7 @@ async def outbox_checker(app):
                             )
                             msg['sent'] = True
                             changed = True
+                            last_check = current_time
                             print(f"[OUTBOX] Sent reply to {msg['chat_id']}")
                         except Exception as e:
                             print(f"[OUTBOX] Error: {e}")
@@ -270,11 +499,12 @@ async def outbox_checker(app):
         except Exception as e:
             print(f"[OUTBOX] Check error: {e}")
         
-        await asyncio.sleep(2)
+        await asyncio.sleep(interval)
 
 async def post_init_and_start(app):
-    """Post init and start outbox checker"""
+    """Post init and start all background tasks"""
     asyncio.create_task(outbox_checker(app))
+    asyncio.create_task(inbox_processor(app))
     await post_init(app)
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -291,11 +521,12 @@ def main():
     print(f"   Telegram Token: {masked_token}")
     print(f"   Bridge Dir: {BRIDGE_DIR}")
     print()
-    print("Flow:")
-    print("   1. Message in Telegram -> inbox.json")
-    print("   2. Run /telegram in OpenCode")
-    print("   3. Reply written to outbox.json")
-    print("   4. This bot auto-sends reply to Telegram")
+    print("Auto-Commands (no OpenCode needed):")
+    print("   - git status, git log, git branch, git diff")
+    print("   - cmd <command>")
+    print("   - hello, ok, thanks, time, date")
+    print()
+    print("Bot is starting...")
     print()
     print("To run in background (PowerShell):")
     print("   Start-Process python -ArgumentList 'telegram_bridge.py' -WindowStyle Hidden")
@@ -311,6 +542,8 @@ def main():
     application.add_handler(CommandHandler("clear", clear_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("ai", ai_command))
+    application.add_handler(CommandHandler("aia", aia_command))
+    application.add_handler(CommandHandler("readx", readx_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)

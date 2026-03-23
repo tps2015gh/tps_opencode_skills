@@ -285,17 +285,25 @@ async def aia_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def telegram_loop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /telegram command - process inbox with loop"""
-    await update.message.reply_text("Processing Telegram inbox... (stop with /stop)")
+    """Handle /telegram command - process inbox with auto-restart loop"""
+    chat_id = update.message.chat_id
+    
+    await update.message.reply_text(
+        "Starting Telegram inbox processor...\n"
+        "Auto-restart enabled if crashed.\n"
+        "Sends 'stop' to halt."
+    )
     
     messages_processed = 0
     last_message_count = -1
+    stop_requested = False
+    restart_count = 0
     
-    # Process for up to 60 seconds or until stopped
     import time
     start_time = time.time()
+    max_runtime = 300  # 5 minutes max
     
-    while time.time() - start_time < 60:
+    while time.time() - start_time < max_runtime and not stop_requested:
         try:
             if os.path.exists(INBOX_FILE):
                 try:
@@ -305,29 +313,26 @@ async def telegram_loop_command(update: Update, context: ContextTypes.DEFAULT_TY
                             inbox = json.loads(content)
                         else:
                             inbox = []
-                except:
+                except json.JSONDecodeError:
                     inbox = []
                 
                 pending = [m for m in inbox if not m.get('processed', False)]
                 
-                # Stop if no more messages
                 if len(pending) == 0:
                     if messages_processed > 0:
-                        await update.message.reply_text(
-                            f"Done! Processed {messages_processed} messages."
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=f"Done! Processed {messages_processed} messages."
                         )
-                    else:
-                        await update.message.reply_text("No pending messages.")
                     return
                 
-                # Show progress every 5 seconds or when count changes
                 if len(pending) != last_message_count:
-                    await update.message.reply_text(
-                        f"Processing... {len(pending)} messages remaining"
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"Processing... {len(pending)} messages remaining"
                     )
                     last_message_count = len(pending)
                 
-                # Mark first pending message as processed (for OpenCode to handle)
                 msg = pending[0]
                 msg['processed'] = True
                 
@@ -335,16 +340,29 @@ async def telegram_loop_command(update: Update, context: ContextTypes.DEFAULT_TY
                     json.dump(inbox, f, ensure_ascii=False, indent=2)
                 
                 messages_processed += 1
-                print(f"[LOOP] Marked message for processing: {msg.get('text', '')[:50]}...")
+                print(f"[LOOP] Marked: {msg.get('text', '')[:50]}...")
         
+        except asyncio.CancelledError:
+            print("[LOOP] Cancelled")
+            break
         except Exception as e:
             print(f"[LOOP] Error: {e}")
+            restart_count += 1
+            if restart_count > 10:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"Too many errors ({restart_count}). Stopping."
+                )
+                break
+            await asyncio.sleep(2)  # Wait before retry
         
         await asyncio.sleep(1)
     
-    await update.message.reply_text(
-        f"Loop stopped. Processed {messages_processed} messages."
-    )
+    if time.time() - start_time >= max_runtime:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"Timeout (5min). Processed {messages_processed} messages."
+        )
 
 async def readx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /readx command - read last AI response as TTS"""
@@ -376,10 +394,11 @@ async def readx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await update.message.reply_text("Generating audio...")
         
-        # Generate TTS
+        # Generate TTS - use await instead of asyncio.run
         try:
             import edge_tts
-            asyncio.run(edge_tts.Communicate(content[:2000], "th-TH-PremwadeeNeural").save(tts_output))
+            communicate = edge_tts.Communicate(content[:2000], "th-TH-PremwadeeNeural")
+            await communicate.save(tts_output)
             
             with open(tts_output, 'rb') as audio:
                 await update.message.reply_voice(audio, caption="Read: " + content[:100] + "...")

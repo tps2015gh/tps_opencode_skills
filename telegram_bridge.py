@@ -175,15 +175,17 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Commands:\n\n"
         "/ai <message> - Forward to OpenCode Agent\n"
-        "/aia <message> - Forward with audio\n"
-        "/readx - Read last reply as audio\n\n"
+        "/aia <message> - Forward with audio reply\n"
+        "/readx - Read last reply as TTS audio\n"
+        "/status - Check bridge status\n"
+        "/pending - View pending messages\n"
+        "/clear - Clear all data\n\n"
         "Auto-commands (instant):\n"
-        "git status - Show git status\n"
-        "git log - Show recent commits\n"
-        "git branch - Show branches\n"
-        "cmd <command> - Run any command\n\n"
-        "Simple chat:\n"
-        "hello, ok, thanks, time, date"
+        "hello, hi, ok, thanks\n"
+        "time, date\n"
+        "git status, git log, git branch\n"
+        "cmd <command>\n\n"
+        "Simple chat works instantly!"
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -282,6 +284,68 @@ async def aia_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"OpenCode Agent will reply with text + audio."
     )
 
+async def telegram_loop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /telegram command - process inbox with loop"""
+    await update.message.reply_text("Processing Telegram inbox... (stop with /stop)")
+    
+    messages_processed = 0
+    last_message_count = -1
+    
+    # Process for up to 60 seconds or until stopped
+    import time
+    start_time = time.time()
+    
+    while time.time() - start_time < 60:
+        try:
+            if os.path.exists(INBOX_FILE):
+                try:
+                    with open(INBOX_FILE, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        if content:
+                            inbox = json.loads(content)
+                        else:
+                            inbox = []
+                except:
+                    inbox = []
+                
+                pending = [m for m in inbox if not m.get('processed', False)]
+                
+                # Stop if no more messages
+                if len(pending) == 0:
+                    if messages_processed > 0:
+                        await update.message.reply_text(
+                            f"Done! Processed {messages_processed} messages."
+                        )
+                    else:
+                        await update.message.reply_text("No pending messages.")
+                    return
+                
+                # Show progress every 5 seconds or when count changes
+                if len(pending) != last_message_count:
+                    await update.message.reply_text(
+                        f"Processing... {len(pending)} messages remaining"
+                    )
+                    last_message_count = len(pending)
+                
+                # Mark first pending message as processed (for OpenCode to handle)
+                msg = pending[0]
+                msg['processed'] = True
+                
+                with open(INBOX_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(inbox, f, ensure_ascii=False, indent=2)
+                
+                messages_processed += 1
+                print(f"[LOOP] Marked message for processing: {msg.get('text', '')[:50]}...")
+        
+        except Exception as e:
+            print(f"[LOOP] Error: {e}")
+        
+        await asyncio.sleep(1)
+    
+    await update.message.reply_text(
+        f"Loop stopped. Processed {messages_processed} messages."
+    )
+
 async def readx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /readx command - read last AI response as TTS"""
     user = update.effective_user
@@ -336,15 +400,23 @@ async def post_init(application: Application):
         BotCommand("start", "Start"),
         BotCommand("ai", "Talk to AI"),
         BotCommand("aia", "Talk + Audio"),
-        BotCommand("readx", "Read last reply"),
+        BotCommand("readx", "Read as audio"),
         BotCommand("status", "Check status"),
         BotCommand("pending", "View pending"),
-        BotCommand("help", "Help"),
+        BotCommand("help", "All commands"),
         BotCommand("clear", "Clear data"),
     ])
 
 # ─── Command Executor ───────────────────────────────────────────────────────
 import subprocess
+
+def save_last_response(text: str):
+    """Save last response to file for /readx"""
+    try:
+        with open(os.path.join(BRIDGE_DIR, 'last_response.txt'), 'w', encoding='utf-8') as f:
+            f.write(text)
+    except:
+        pass
 
 def run_command(cmd: str) -> str:
     """Run a shell command and return output"""
@@ -492,6 +564,8 @@ async def outbox_checker(app):
                             msg['sent'] = True
                             changed = True
                             last_check = current_time
+                            # Save last response
+                            save_last_response(msg['text'])
                             print(f"[OUTBOX] Sent reply to {msg['chat_id']}")
                         except Exception as e:
                             print(f"[OUTBOX] Error: {e}")
@@ -547,6 +621,7 @@ def main():
     application.add_handler(CommandHandler("ai", ai_command))
     application.add_handler(CommandHandler("aia", aia_command))
     application.add_handler(CommandHandler("readx", readx_command))
+    application.add_handler(CommandHandler("telegram", telegram_loop_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)

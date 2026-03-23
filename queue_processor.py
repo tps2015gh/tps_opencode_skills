@@ -167,14 +167,19 @@ def main():
     log("=" * 50)
     log(f"\nBridge Dir: {BRIDGE_DIR}")
     log("\n[START] Starting inbox processor...")
-    log("[HEARTBEAT] Status updates every 5 seconds\n")
+    log("[INFO] Checking inbox every 2 seconds\n")
     
     last_count = -1
-    heartbeat_counter = 0
+    last_check = 0
     
     try:
         while True:
-            heartbeat_counter += 1
+            current_time = time.time()
+            
+            # Always show activity every 5 seconds
+            if current_time - last_check >= 5:
+                log(f"[CHECK] Checking inbox... (last pending: {last_count})")
+                last_check = current_time
             
             count = process_inbox()
             if count > 0:
@@ -187,14 +192,10 @@ def main():
                         inbox = json.loads(f.read().strip() or "[]")
                     pending = len([m for m in inbox if not m.get('processed', False)])
                     if pending != last_count:
-                        log(f"[UPDATE] {pending} messages pending")
+                        log(f"[NEW] {pending} messages pending (need OpenCode AI)")
                         last_count = pending
                 except:
                     pass
-            
-            # Heartbeat every 5 iterations (10 seconds)
-            if heartbeat_counter % 5 == 0:
-                log(f"[ALIVE] Processor running... {last_count} pending")
             
             time.sleep(2)  # Check every 2 seconds
     

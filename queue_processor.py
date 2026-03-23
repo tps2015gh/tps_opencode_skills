@@ -171,37 +171,47 @@ def main():
     
     last_count = -1
     last_check = 0
+    check_count = 0
     
     try:
+        log("[LOOP] Entering main loop...")
         while True:
+            check_count += 1
             current_time = time.time()
+            
+            log(f"[LOOP #{check_count}] Running...")
             
             # Always show activity every 5 seconds
             if current_time - last_check >= 5:
-                log(f"[CHECK] Checking inbox... (last pending: {last_count})")
+                log(f"[CHECK] Checking inbox... (pending: {last_count})")
                 last_check = current_time
             
-            count = process_inbox()
-            if count > 0:
-                log(f"[OK] Processed {count} messages")
-            
-            # Check pending messages
-            if os.path.exists(INBOX_FILE):
-                try:
+            try:
+                count = process_inbox()
+                if count > 0:
+                    log(f"[OK] Processed {count} messages")
+                
+                # Check pending messages
+                if os.path.exists(INBOX_FILE):
                     with open(INBOX_FILE, 'r', encoding='utf-8') as f:
                         inbox = json.loads(f.read().strip() or "[]")
                     pending = len([m for m in inbox if not m.get('processed', False)])
                     if pending != last_count:
                         log(f"[NEW] {pending} messages pending (need OpenCode AI)")
                         last_count = pending
-                except:
-                    pass
+            except Exception as e:
+                log(f"[ERROR] {e}")
             
             time.sleep(2)  # Check every 2 seconds
-    
+            
     except KeyboardInterrupt:
         log("\n\n[STOP] Stopping processor...")
         log("[STOP] Done!")
+    except Exception as e:
+        log(f"\n[CRASH] {e}")
+        log("[CRASH] Restarting in 5 seconds...")
+        time.sleep(5)
+        main()  # Restart
 
 if __name__ == "__main__":
     main()

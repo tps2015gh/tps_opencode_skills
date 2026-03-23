@@ -1,0 +1,36 @@
+# Environment variables (token, api keys)
+.env
+.env.local
+.env.*.local
+
+# Bridge data (contains messages and sensitive info)
+bridge_data/
+*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Audio files
+*.mp3
+*.wav
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+nul

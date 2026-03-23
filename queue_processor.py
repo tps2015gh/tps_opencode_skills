@@ -1,231 +1,225 @@
 #!/usr/bin/env python3
-"""
-Telegram Queue Processor
-Real file monitoring with proper file locking
-"""
+"""Telegram Queue Processor v6 - Internal Todo List + Full Response"""
 
 import os
-import sys
 import json
 import time
-import subprocess
-import threading
-import fcntl
+import uuid
 
-BRIDGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bridge_data')
+VERSION = "6.4"
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TASK_SERVER = "http://localhost:5555"
+
+print(f"TELEGRAM_TOKEN: {'SET' if TELEGRAM_TOKEN else 'NOT SET'}")
+print(f"TASK_SERVER: {TASK_SERVER}")
+BRIDGE_DIR = 'bridge_data'
 INBOX_FILE = os.path.join(BRIDGE_DIR, 'inbox.json')
 OUTBOX_FILE = os.path.join(BRIDGE_DIR, 'outbox.json')
-LAST_RESPONSE_FILE = os.path.join(BRIDGE_DIR, 'last_response.txt')
+TODO_FILE = os.path.join(BRIDGE_DIR, 'todo.json')
 
 os.makedirs(BRIDGE_DIR, exist_ok=True)
 
-def log(msg):
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+todo_list = []
 
-def save_last_response(text: str):
+def log(msg):
+    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+def read_json(path):
     try:
-        with open(LAST_RESPONSE_FILE, 'w', encoding='utf-8') as f:
-            f.write(text)
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except:
+        pass
+    return []
+
+def write_json(path, data):
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
     except:
         pass
 
-def read_json_safe(filepath, default=[]):
-    """Read JSON file with error handling"""
-    try:
-        if os.path.exists(filepath):
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-                if content:
-                    return json.loads(content)
-    except (json.JSONDecodeError, ValueError) as e:
-        log(f"READ ERROR {filepath}: {e}")
-    except Exception as e:
-        log(f"READ ERROR {filepath}: {e}")
-    return default
+def add_todo(text, chat_id, message_id, qid):
+    global todo_list
+    todo = {
+        'id': qid,
+        'text': text,
+        'chat_id': chat_id,
+        'message_id': message_id,
+        'status': 'pending',
+        'created_at': time.time()
+    }
+    todo_list.append(todo)
+    save_todo()
+    log(f"TODO ADD [{qid}]: {text[:30]}...")
 
-def write_json_safe(filepath, data):
-    """Write JSON file with error handling"""
+def update_todo(qid, status, response=None):
+    global todo_list
+    for t in todo_list:
+        if t['id'] == qid:
+            t['status'] = status
+            if response:
+                t['response'] = response
+            t['updated_at'] = time.time()
+            save_todo()
+            log(f"TODO UPDATE [{qid}]: {status}")
+            break
+
+def get_pending_todos():
+    return [t for t in todo_list if t['status'] == 'pending']
+
+def get_thinking_todos():
+    return [t for t in todo_list if t['status'] == 'thinking']
+
+def save_todo():
+    write_json(TODO_FILE, todo_list)
+
+def load_todo():
+    global todo_list
+    todo_list = read_json(TODO_FILE)
+
+def send_telegram(chat_id, text, reply_to=None):
+    log(f"SEND to {chat_id}: {text[:30]}...")
+    if not TELEGRAM_TOKEN:
+        log("FAIL: No TELEGRAM_TOKEN")
+        return False
+    import urllib.request, urllib.parse
+    data = {'chat_id': str(chat_id), 'text': text}
+    if reply_to:
+        data['reply_to_message_id'] = reply_to
     try:
-        # Write to temp file first
-        temp_file = filepath + '.tmp'
-        with open(temp_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        
-        # Atomic rename
-        if os.path.exists(filepath):
-            os.remove(filepath)
-        os.rename(temp_file, filepath)
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode())
+        resp = urllib.request.urlopen(req, timeout=10)
+        log(f"OK: Sent to {chat_id}")
         return True
     except Exception as e:
-        log(f"WRITE ERROR {filepath}: {e}")
-        # Try to clean up temp file
-        try:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-        except:
-            pass
+        log(f"FAIL: {e}")
         return False
 
-def run_command(cmd: str) -> str:
+def call_ai(text):
+    if not AI_API_KEY:
+        return "No AI_API_KEY configured"
+    import urllib.request, urllib.parse
+    import json
+    
+    log(f"AI_API_BASE: {AI_API_BASE}")
+    log(f"AI_MODEL: {AI_MODEL}")
+    
+    headers = {'Authorization': f'Bearer {AI_API_KEY}', 'Content-Type': 'application/json'}
+    payload = {
+        "model": AI_MODEL,
+        "messages": [{"role": "user", "content": text}],
+        "max_tokens": 2000
+    }
+    
+def call_ai(text):
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30,
-                             cwd=os.path.dirname(os.path.abspath(__file__)))
-        return result.stdout.strip() or result.stderr.strip() or "Done!"
+        import urllib.request, urllib.parse, json
+        
+        req = urllib.request.Request(
+            f"{TASK_SERVER}/task",
+            data=json.dumps({'text': text}).encode(),
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        urllib.request.urlopen(req, timeout=10)
+        log(f"Task sent to server: {text[:30]}...")
+        
+        for i in range(60):
+            time.sleep(2)
+            try:
+                req = urllib.request.Request(f"{TASK_SERVER}/result", method='GET')
+                resp = urllib.request.urlopen(req, timeout=5)
+                result = json.loads(resp.read().decode())
+                if result.get('result'):
+                    result_text = result['result']
+                    log(f"Got result: {result_text[:50]}...")
+                    return result_text
+            except:
+                pass
+        
+        return f"⏱️ Task sent to OpenCode: {text[:80]}"
     except Exception as e:
+        log(f"ERROR calling task server: {e}")
         return f"Error: {e}"
 
-def get_auto_response(text: str) -> str:
-    text_lower = text.lower().strip()
+def process_message(msg, qid):
+    chat_id = msg['chat_id']
+    message_id = msg['message_id']
+    text = msg['text']
     
-    if text_lower in ['ok', 'okay', 'ครับ', 'ขอบคุณ', 'thanks', 'thank you']:
-        return "OK!"
+    log(f"PROCESS [{qid}]: {text}")
+    send_telegram(chat_id, f"🔄 Processing: {text[:50]}...", message_id)
+    update_todo(qid, 'processing')
     
-    if 'time' in text_lower or 'เวลา' in text_lower or 'กี่โมง' in text_lower:
-        from datetime import datetime
-        return f"Current time: {datetime.now().strftime('%H:%M')} ICT"
+    log(f"CALLING AI for: {text[:50]}...")
+    response = call_ai(text)
     
-    if 'date' in text_lower or 'วันที่' in text_lower or 'today' in text_lower:
-        from datetime import datetime
-        return f"Today: {datetime.now().strftime('%d/%m/%Y')}"
+    log(f"RESPONSE [{qid}]: {response[:100]}...")
     
-    if 'status' in text_lower or 'สถานะ' in text_lower:
-        return "System is running normally."
+    result = send_telegram(chat_id, f"✅ Done!\n\n{response}", message_id)
+    log(f"SEND RESULT: {result}")
+    update_todo(qid, 'completed', response)
     
-    if 'hello' in text_lower or 'hi' in text_lower or 'สวัสดี' in text_lower:
-        return "Hello! I'm here. What can I help you with?"
-    
-    if text_lower.startswith('git '):
-        cmd = text_lower[4:]
-        if 'status' in cmd:
-            return f"```\n{run_command('git status')}\n```"
-        if 'log' in cmd:
-            return f"```\n{run_command('git log --oneline -5')}\n```"
-        if 'branch' in cmd:
-            return f"```\n{run_command('git branch -a')}\n```"
-        return f"```\n{run_command('git ' + cmd)}\n```"
-    
-    if text_lower.startswith('cmd '):
-        return f"```\n{run_command(text_lower[4:])}\n```"
-    
-    return None
-
-def process_inbox():
-    """Process inbox and add responses to outbox"""
-    inbox = read_json_safe(INBOX_FILE)
-    outbox = read_json_safe(OUTBOX_FILE)
-    
-    if not inbox:
-        return 0, 0
-    
-    processed = 0
-    pending = 0
-    changed = False
-    
-    for msg in inbox:
-        if not msg.get('processed', False):
-            text = msg.get('text', '')
-            auto_reply = get_auto_response(text)
-            
-            if auto_reply:
-                outbox.append({
-                    'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S'),
-                    'chat_id': msg['chat_id'],
-                    'reply_to_message_id': msg['message_id'],
-                    'text': auto_reply,
-                    'sent': False
-                })
-                msg['processed'] = True
-                save_last_response(auto_reply)
-                processed += 1
-                changed = True
-                log(f"AUTO: {text[:40]}...")
-            else:
-                pending += 1
-    
-    if changed:
-        write_json_safe(INBOX_FILE, inbox)
-        write_json_safe(OUTBOX_FILE, outbox)
-        log(f"DONE: {processed} auto-replied, {pending} pending")
-    elif pending > 0:
-        log(f"WAIT: {pending} messages need OpenCode AI")
-    
-    return processed, pending
-
-class FileMonitor:
-    def __init__(self):
-        self.last_mtime = 0
-        self.last_size = 0
-        self.running = True
-        self.processing = False
-        
-    def start(self):
-        log("START: File monitor initializing...")
-        if os.path.exists(INBOX_FILE):
-            stat = os.stat(INBOX_FILE)
-            self.last_mtime = stat.st_mtime
-            self.last_size = stat.st_size
-        self.thread = threading.Thread(target=self._monitor)
-        self.thread.daemon = True
-        self.thread.start()
-        log("START: Monitor active")
-        
-    def _monitor(self):
-        log("MONITOR: Watching inbox file...")
-        while self.running:
-            try:
-                if os.path.exists(INBOX_FILE):
-                    stat = os.stat(INBOX_FILE)
-                    
-                    # Detect change
-                    if stat.st_mtime != self.last_mtime or stat.st_size != self.last_size:
-                        if not self.processing:
-                            log("CHANGE: Inbox file modified!")
-                            self.last_mtime = stat.st_mtime
-                            self.last_size = stat.st_size
-                            
-                            # Process with lock
-                            self.processing = True
-                            time.sleep(0.2)  # Wait for write to complete
-                            process_inbox()
-                            self.processing = False
-            except Exception as e:
-                log(f"MONITOR ERROR: {e}")
-                time.sleep(1)
-            
-            time.sleep(0.3)  # Check every 300ms
-            
-        log("MONITOR: Stopped")
-    
-    def stop(self):
-        self.running = False
-        try:
-            self.thread.join(timeout=2)
-        except:
-            pass
+    return response
 
 def main():
-    log("=" * 50)
-    log("  Telegram Queue Processor - ACTIVE")
-    log("=" * 50)
-    log(f"")
-    log(f"Bridge Dir: {BRIDGE_DIR}")
-    log(f"")
+    global todo_list
+    load_todo()
+    log(f"Queue Processor v{VERSION} - Todo List Enabled")
+    log(f"Active jobs: {len(get_pending_todos())}")
     
-    monitor = FileMonitor()
-    monitor.start()
-    
-    log("READY: Monitoring for messages...")
-    log("Press Ctrl+C to stop")
-    log("")
-    
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        log("")
-        log("STOP: Shutting down...")
-        monitor.stop()
-        log("STOP: Done!")
+    while True:
+        try:
+            inbox = read_json(INBOX_FILE)
+            
+            new_msgs = [m for m in inbox if not m.get('_qid')]
+            
+            if new_msgs:
+                for msg in new_msgs:
+                    qid = str(uuid.uuid4())[:8]
+                    msg['_qid'] = qid
+                    msg['_status'] = 'queued'
+                    add_todo(msg.get('text', ''), msg['chat_id'], msg['message_id'], qid)
+                    log(f"QUEUED [{qid}]: {msg.get('text', '')[:25]}")
+                write_json(INBOX_FILE, inbox)
+            
+            pending = [m for m in inbox if m.get('_status') == 'queued']
+            
+            if pending:
+                for msg in pending:
+                    qid = msg.get('_qid', '???')
+                    chat_id = msg['chat_id']
+                    message_id = msg['message_id']
+                    
+                    if send_telegram(chat_id, "⏳ Thinking...", message_id):
+                        msg['_status'] = 'sent'
+                        update_todo(qid, 'thinking')
+                        log(f"SENT [{qid}]")
+                    else:
+                        log(f"FAIL [{qid}] - retry next loop")
+                write_json(INBOX_FILE, inbox)
+            
+            todos = get_thinking_todos()
+            if todos:
+                for t in todos:
+                    if t['status'] == 'thinking':
+                        process_message(
+                            {'chat_id': t['chat_id'], 'message_id': t['message_id'], 'text': t['text']},
+                            t['id']
+                        )
+            
+            print(".", end="", flush=True)
+            time.sleep(3)
+            
+        except KeyboardInterrupt:
+            log("\nStop!")
+            break
+        except Exception as e:
+            log(f"ERR: {e}")
+            time.sleep(5)
 
 if __name__ == "__main__":
     main()

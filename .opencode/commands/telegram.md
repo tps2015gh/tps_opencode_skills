@@ -1,50 +1,58 @@
 ---
-description: Check Telegram inbox and reply to messages
+description: Process Telegram messages with AI
 ---
 
 ## Command: /telegram
 
-Read pending messages from Telegram bridge and reply.
+Process Telegram messages with OpenCode AI.
 
-## Setup (PowerShell)
+## Flow
 
-```powershell
-# Set token (current session)
-$env:TELEGRAM_BOT_TOKEN="your_token_here"
-
-# Install dependency
-pip install python-telegram-bot
-
-# Start bridge (keep running)
-python telegram_bridge.py
 ```
-
-## How to Use
-
-1. Start bridge server: `python telegram_bridge.py`
-2. Send message from Telegram
-3. Bot shows: "Waiting for OpenCode Agent..."
-4. Run `/telegram` in OpenCode
-5. I read inbox.json, write reply to outbox.json
-6. Bot sends reply to Telegram (auto-check every 2 seconds)
+Telegram message → telegram_bridge → inbox.json
+                                       ↓
+                               queue_processor.py
+                               (marks _ai: true)
+                                       ↓
+OpenCode reads inbox → reply → send to Telegram → mark processed
+```
 
 ## Steps
 
 1. Read `bridge_data/inbox.json`
-2. Find messages where `"processed": false`
-3. Reply to each message naturally
-4. Write reply to `bridge_data/outbox.json`:
-   ```json
-   {
-     "chat_id": <number>,
-     "reply_to_message_id": <number>,
-     "text": "Your reply here",
-     "sent": false
-   }
+2. Find messages where `"_ai": true` and `"processed": false`
+3. Reply to message naturally
+4. Send reply to Telegram:
+   ```python
+   import urllib.request, urllib.parse, os
+   token = os.getenv('TELEGRAM_BOT_TOKEN')
+   url = f"https://api.telegram.org/bot{token}/sendMessage"
+   data = urllib.parse.urlencode({
+       'chat_id': CHAT_ID, 
+       'text': 'Your AI reply here', 
+       'reply_to_message_id': MSG_ID
+   }).encode()
+   urllib.request.urlopen(url, data=data)
    ```
-5. Mark message as `"processed": true` in inbox
+5. **Mark message as `"processed": true`** in inbox
+6. **Remove processed messages from inbox**
 
-## Response
+## Example
 
-- **No pending**: "No pending Telegram messages"
-- **Pending messages**: Show count, reply to each, write to outbox, mark as processed
+```
+/telegram
+```
+
+I will:
+- Read inbox.json
+- Find messages needing AI
+- Reply to each
+- Send to Telegram
+- Clean up inbox
+
+## Notes
+
+- **ALL messages go to AI** (no auto-reply)
+- queue_processor only marks messages as queued
+- You send actual replies from OpenCode
+- Always cleanup inbox after replying

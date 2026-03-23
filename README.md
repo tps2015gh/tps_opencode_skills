@@ -8,6 +8,7 @@ A collection of AI-powered skills and tools for OpenCode AI Agent.
 |------|------|-------------|
 | Director Supervisor | @p400 | Project owner, strategy, and direction |
 | Lead Developer & Tech Lead | **Big Pickle** (OpenCode Zen AI) | Architecture, development, and technical decisions |
+| Human Debugger & Deadlock Consultant | @p400 | Real-world testing, deadlock detection, semaphore suggestions |
 
 ## Project Opinion
 

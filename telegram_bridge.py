@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Telegram OpenCode Bridge
+Telegram OpenCode Bridge v2
 Telegram messages → File → OpenCode Agent processes → Reply
-No external AI needed, use OpenCode directly
 """
+
+VERSION = "2.0"
 
 import os
 import sys
@@ -21,16 +22,7 @@ from telegram.ext import (
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 BRIDGE_DIR = os.getenv('TELEGRAM_BRIDGE_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bridge_data'))
 INBOX_FILE = os.path.join(BRIDGE_DIR, 'inbox.json')
-OUTBOX_FILE = os.path.join(BRIDGE_DIR, 'outbox.json')
 
-# ─── Logging ───────────────────────────────────────────────────────────────────
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-# ─── Create Bridge Directory ───────────────────────────────────────────────────
 os.makedirs(BRIDGE_DIR, exist_ok=True)
 
 # ─── Check Configuration ───────────────────────────────────────────────────────
@@ -74,29 +66,6 @@ def add_to_inbox(chat_id: int, message_id: int, user_id: int, username: str, tex
     
     print(f"[INBOX] New message from @{username}: {text[:50]}...")
 
-def add_to_outbox(chat_id: int, reply_to_message_id: int, text: str):
-    """Add reply to outbox"""
-    outbox = []
-    if os.path.exists(OUTBOX_FILE):
-        try:
-            with open(OUTBOX_FILE, 'r', encoding='utf-8') as f:
-                outbox = json.load(f)
-        except:
-            outbox = []
-    
-    outbox.append({
-        'timestamp': datetime.now().isoformat(),
-        'chat_id': chat_id,
-        'reply_to_message_id': reply_to_message_id,
-        'text': text,
-        'sent': False
-    })
-    
-    with open(OUTBOX_FILE, 'w', encoding='utf-8') as f:
-        json.dump(outbox, f, ensure_ascii=False, indent=2)
-    
-    print(f"[OUTBOX] Reply queued for chat {chat_id}")
-
 # ─── Commands ─────────────────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -123,18 +92,9 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
     
-    if os.path.exists(OUTBOX_FILE):
-        try:
-            with open(OUTBOX_FILE, 'r', encoding='utf-8') as f:
-                outbox = json.load(f)
-                outbox_count = len([m for m in outbox if not m.get('sent', False)])
-        except:
-            pass
-    
     await update.message.reply_text(
         f"Status:\n\n"
         f"Inbox (pending): {inbox_count}\n"
-        f"Outbox (pending): {outbox_count}\n"
         f"Bridge Dir: `{BRIDGE_DIR}`",
         parse_mode="Markdown"
     )
@@ -165,8 +125,6 @@ async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if os.path.exists(INBOX_FILE):
             os.remove(INBOX_FILE)
-        if os.path.exists(OUTBOX_FILE):
-            os.remove(OUTBOX_FILE)
         await update.message.reply_text("Cleared!")
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
@@ -501,112 +459,14 @@ def get_auto_response(text: str) -> str:
 
 # ─── Auto-Inbox Processor ───────────────────────────────────────────────────
 async def inbox_processor(app):
-    """Periodically check inbox and auto-respond or mark for OpenCode"""
-    print("[AUTO] Starting auto-inbox processor...")
-    while True:
-        try:
-            if os.path.exists(INBOX_FILE):
-                try:
-                    with open(INBOX_FILE, 'r', encoding='utf-8') as f:
-                        content = f.read().strip()
-                        if not content:
-                            inbox = []
-                        else:
-                            inbox = json.loads(content)
-                except (json.JSONDecodeError, ValueError):
-                    inbox = []
-                
-                changed = False
-                for msg in inbox:
-                    if not msg.get('processed', False):
-                        text = msg.get('text', '')
-                        
-                        # Get auto-response
-                        auto_reply = get_auto_response(text)
-                        if auto_reply:
-                            # Send auto-response
-                            try:
-                                await app.bot.send_message(
-                                    chat_id=msg['chat_id'],
-                                    text=auto_reply,
-                                    reply_to_message_id=msg.get('message_id')
-                                )
-                                msg['processed'] = True
-                                changed = True
-                                print(f"[AUTO] Replied to @{msg.get('username')}: {text[:50]}...")
-                            except Exception as e:
-                                print(f"[AUTO] Send error: {e}")
-                        elif text.startswith('[/ai]') or text.startswith('/ai ') or text.startswith('/aia '):
-                            # Mark as processed - needs OpenCode
-                            # (User should run /telegram manually or we auto-process)
-                            msg['processed'] = True
-                            changed = True
-                            print(f"[AUTO] Marked for OpenCode: {text[:50]}...")
-                
-                if changed:
-                    with open(INBOX_FILE, 'w', encoding='utf-8') as f:
-                        json.dump(inbox, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"[AUTO] Process error: {e}")
-        
-        await asyncio.sleep(1)
-
-# ─── Periodic Check for Outbox ──────────────────────────────────────────────
-async def outbox_checker(app):
-    """Periodically check outbox and send pending replies"""
-    last_check = 0
-    while True:
-        try:
-            current_time = asyncio.get_event_loop().time()
-            interval = 0.5 if current_time - last_check < 5 else 2
-            
-            if os.path.exists(OUTBOX_FILE):
-                try:
-                    with open(OUTBOX_FILE, 'r', encoding='utf-8') as f:
-                        content = f.read().strip()
-                        if not content:
-                            outbox = []
-                        else:
-                            outbox = json.loads(content)
-                except (json.JSONDecodeError, ValueError):
-                    outbox = []
-                
-                changed = False
-                for msg in outbox:
-                    if not msg.get('sent', False):
-                        try:
-                            await app.bot.send_message(
-                                chat_id=msg['chat_id'],
-                                text=msg['text'],
-                                reply_to_message_id=msg.get('reply_to_message_id')
-                            )
-                            msg['sent'] = True
-                            changed = True
-                            last_check = current_time
-                            # Save last response
-                            save_last_response(msg['text'])
-                            print(f"[OUTBOX] Sent reply to {msg['chat_id']}")
-                        except Exception as e:
-                            print(f"[OUTBOX] Error: {e}")
-                
-                if changed:
-                    with open(OUTBOX_FILE, 'w', encoding='utf-8') as f:
-                        json.dump(outbox, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"[OUTBOX] Check error: {e}")
-        
-        await asyncio.sleep(interval)
-
-async def post_init_and_start(app):
-    """Post init and start all background tasks"""
-    asyncio.create_task(outbox_checker(app))
-    asyncio.create_task(inbox_processor(app))
-    await post_init(app)
+    """No longer needed - queue_processor handles everything"""
+    pass
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 def main():
+    
     print("=" * 60)
-    print("  Telegram OpenCode Bridge")
+    print(f"  Telegram OpenCode Bridge v{VERSION}")
     print("=" * 60)
     
     if not check_config():
@@ -630,7 +490,7 @@ def main():
     print("Bot is starting...")
     print("=" * 60)
     
-    application = Application.builder().token(TELEGRAM_TOKEN).post_init(post_init_and_start).build()
+    application = Application.builder().token(TELEGRAM_TOKEN).post_init(post_init).build()
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("status", status_command))
@@ -643,7 +503,27 @@ def main():
     application.add_handler(CommandHandler("telegram", telegram_loop_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    import asyncio
+    
+    async def run_with_interrupt():
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        
+        print("Bot running. Press Ctrl+C to stop...")
+        
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            print("\n[SHUTDOWN] Stopping...")
+        finally:
+            await application.updater.stop()
+            await application.stop()
+            await application.shutdown()
+            print("[SHUTDOWN] Bot stopped.")
+    
+    asyncio.run(run_with_interrupt())
 
 if __name__ == "__main__":
     main()

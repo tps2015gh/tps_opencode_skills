@@ -163,37 +163,44 @@ def process_inbox():
 
 def main():
     log("=" * 50)
-    log("  Telegram Queue Processor")
+    log("  Telegram Queue Processor - ACTIVE")
     log("=" * 50)
     log(f"\nBridge Dir: {BRIDGE_DIR}")
-    log("\nStarting continuous inbox processor...")
-    log("Press Ctrl+C to stop\n")
+    log("\n[START] Starting inbox processor...")
+    log("[HEARTBEAT] Status updates every 5 seconds\n")
     
     last_count = -1
+    heartbeat_counter = 0
     
     try:
         while True:
+            heartbeat_counter += 1
+            
             count = process_inbox()
             if count > 0:
                 log(f"[OK] Processed {count} messages")
             
-            # Check if no new messages for a while
+            # Check pending messages
             if os.path.exists(INBOX_FILE):
                 try:
                     with open(INBOX_FILE, 'r', encoding='utf-8') as f:
                         inbox = json.loads(f.read().strip() or "[]")
                     pending = len([m for m in inbox if not m.get('processed', False)])
                     if pending != last_count:
-                        log(f"[STATUS] {pending} pending (need OpenCode AI)")
+                        log(f"[UPDATE] {pending} messages pending")
                         last_count = pending
                 except:
                     pass
             
+            # Heartbeat every 5 iterations (10 seconds)
+            if heartbeat_counter % 5 == 0:
+                log(f"[ALIVE] Processor running... {last_count} pending")
+            
             time.sleep(2)  # Check every 2 seconds
     
     except KeyboardInterrupt:
-        log("\n\nStopping processor...")
-        log("Done!")
+        log("\n\n[STOP] Stopping processor...")
+        log("[STOP] Done!")
 
 if __name__ == "__main__":
     main()

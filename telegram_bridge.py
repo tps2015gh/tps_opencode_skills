@@ -187,13 +187,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle all messages"""
+    """Handle all messages - auto-respond or process immediately"""
     user = update.effective_user
     text = update.message.text.strip()
     
+    # Check for auto-response first
+    auto_reply = get_auto_response(text)
+    if auto_reply:
+        # Send auto-response immediately
+        await update.message.reply_text(auto_reply)
+        return
+    
     # Check if it's a command (starts with /)
     if text.startswith('/'):
-        # Treat as /ai command
         add_to_inbox(
             chat_id=update.message.chat_id,
             message_id=update.message.message_id,
@@ -201,8 +207,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username=user.username or user.first_name,
             text=f"[/ai] {text}"
         )
+        await update.message.reply_text(
+            f"Command received!\n\n"
+            f"Use /ai to forward to OpenCode Agent.\n"
+            f"For instant response, just chat normally."
+        )
     else:
-        # Regular message - add to inbox
+        # Regular message - add to inbox and auto-process
         add_to_inbox(
             chat_id=update.message.chat_id,
             message_id=update.message.message_id,
@@ -210,23 +221,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username=user.username or user.first_name,
             text=text
         )
-    
-    await update.message.reply_text(
-        f"Message received!\n\n"
-        f"From: @{user.username or user.first_name}\n"
-        f"Message: {text[:100]}{'...' if len(text) > 100 else ''}\n\n"
-        f"OpenCode Agent will reply..."
-    )
-    
-    await update.message.reply_text(
-        f"Got your message!\n\n"
-        f"From: @{user.username or user.first_name}\n"
-        f"Message: {text[:100]}{'...' if len(text) > 100 else ''}\n\n"
-        f"Waiting for OpenCode Agent to reply..."
-    )
+        await update.message.reply_text(
+            f"Message received!\n\n"
+            f"For quick responses, try: hello, time, date, git status"
+        )
 
 async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /ai command - reply immediately"""
+    """Handle /ai command - add to inbox for OpenCode"""
     user = update.effective_user
     
     if not context.args:
@@ -247,16 +248,14 @@ async def ai_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=f"[/ai] {text}"
     )
     
-    # REPLY IMMEDIATELY
     await update.message.reply_text(
-        f"Message received!\n\n"
-        f"From: @{user.username or user.first_name}\n"
-        f"Message: {text[:100]}{'...' if len(text) > 100 else ''}\n\n"
-        f"OpenCode Agent will reply soon..."
+        f"Message forwarded to OpenCode Agent!\n\n"
+        f"Run /telegram in OpenCode to process.\n"
+        f"Or just chat - I auto-respond to simple messages."
     )
 
 async def aia_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /aia command - reply immediately with audio note"""
+    """Handle /aia command - add to inbox for OpenCode with audio"""
     user = update.effective_user
     
     if not context.args:
@@ -278,12 +277,9 @@ async def aia_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=f"[/aia] {text}"
     )
     
-    # REPLY IMMEDIATELY
     await update.message.reply_text(
-        f"Message received (audio mode)!\n\n"
-        f"From: @{user.username or user.first_name}\n"
-        f"Message: {text[:100]}{'...' if len(text) > 100 else ''}\n\n"
-        f"OpenCode Agent will reply with text + audio..."
+        f"Message forwarded (audio mode)!\n\n"
+        f"OpenCode Agent will reply with text + audio."
     )
 
 async def readx_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -414,7 +410,7 @@ def get_auto_response(text: str) -> str:
 
 # ─── Auto-Inbox Processor ───────────────────────────────────────────────────
 async def inbox_processor(app):
-    """Periodically check inbox and auto-respond"""
+    """Periodically check inbox and auto-respond or mark for OpenCode"""
     print("[AUTO] Starting auto-inbox processor...")
     while True:
         try:
@@ -437,6 +433,7 @@ async def inbox_processor(app):
                         # Get auto-response
                         auto_reply = get_auto_response(text)
                         if auto_reply:
+                            # Send auto-response
                             try:
                                 await app.bot.send_message(
                                     chat_id=msg['chat_id'],
@@ -448,6 +445,12 @@ async def inbox_processor(app):
                                 print(f"[AUTO] Replied to @{msg.get('username')}: {text[:50]}...")
                             except Exception as e:
                                 print(f"[AUTO] Send error: {e}")
+                        elif text.startswith('[/ai]') or text.startswith('/ai ') or text.startswith('/aia '):
+                            # Mark as processed - needs OpenCode
+                            # (User should run /telegram manually or we auto-process)
+                            msg['processed'] = True
+                            changed = True
+                            print(f"[AUTO] Marked for OpenCode: {text[:50]}...")
                 
                 if changed:
                     with open(INBOX_FILE, 'w', encoding='utf-8') as f:

@@ -24,6 +24,7 @@ AI-powered Telegram bridge with reusable skills for OpenCode.
 |------|-----------|
 | **Report System** | Built html-report skill with multi-page support, SVG bar/line graphs, border frames |
 | **Facebook Converter** | Built html-to-facebook skill to convert HTML reports to Facebook posts with graph images |
+| **PDF to Telegram** | Built pdf-to-telegram skill to list PDFs and send selected to Telegram |
 | **Queue Monitor** | Created inbox polling system with 2-min interval, auto-reply, status updates |
 | **Piano Skill** | Implemented piano note generation (C3-C6), WAV output, tempo control |
 | **Thai TTS** | Integrated Microsoft Edge TTS for Thai text-to-speech |
@@ -45,6 +46,7 @@ AI-powered Telegram bridge with reusable skills for OpenCode.
 | piano | `piano.py` | Play piano notes, generate WAV |
 | html-report | `report.py` | Create A4 portrait HTML reports |
 | html-to-facebook | `convert.py` | Convert HTML reports to Facebook posts |
+| pdf-to-telegram | `pdf_send.py` | List PDFs and send selected to Telegram |
 
 ## Quick Install to Other Project
 
@@ -72,6 +74,7 @@ copy .env C:\your_project\.env
     piano/            play piano notes
     html-report/      create A4 HTML reports
     html-to-facebook/ convert HTML to Facebook posts
+    pdf-to-telegram/  list PDFs and send to Telegram
   commands/
     telegram.md       /telegram command
 .env                  TELEGRAM_BOT_TOKEN
@@ -92,6 +95,7 @@ reports/              generated HTML reports (gitignored)
 | piano | [.opencode/skills/piano/SKILL.md](.opencode/skills/piano/SKILL.md) |
 | html-report | [.opencode/skills/html-report/SKILL.md](.opencode/skills/html-report/SKILL.md) |
 | html-to-facebook | [.opencode/skills/html-to-facebook/SKILL.md](.opencode/skills/html-to-facebook/SKILL.md) |
+| pdf-to-telegram | [.opencode/skills/pdf-to-telegram/SKILL.md](.opencode/skills/pdf-to-telegram/SKILL.md) |
 
 ## How It Works
 

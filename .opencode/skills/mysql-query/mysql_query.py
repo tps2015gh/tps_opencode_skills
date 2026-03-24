@@ -1,46 +1,32 @@
 #!/usr/bin/env python3
-"""MySQL Query - Execute SQL queries and display results as table"""
+"""MySQL Query - Execute SQL queries using Python connector (no mysql.exe needed)"""
 
 import os
 import sys
-import json
-import subprocess
-import getpass
+import io
+
+# Fix Windows encoding
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # Session config (not saved to file)
 SESSION_CONFIG = {}
 
 
-def load_config():
-    """Load MySQL config - mysql_path from file, credentials from session"""
-    config_file = os.path.join(os.path.dirname(__file__), 'mysql_config.json')
-    file_config = {}
-    if os.path.exists(config_file):
-        with open(config_file, 'r') as f:
-            file_config = json.load(f)
-    
-    # Merge: session overrides file
-    config = {**file_config, **SESSION_CONFIG}
-    return config
-
-
-def save_config(config):
-    """Save only mysql_path to file, credentials stay in session"""
-    config_file = os.path.join(os.path.dirname(__file__), 'mysql_config.json')
-    safe_config = {'mysql_path': config.get('mysql_path', '')}
-    with open(config_file, 'w') as f:
-        json.dump(safe_config, f, indent=2)
-
-
-def setup_mysql_path(mysql_path):
-    """Setup mysql.exe path"""
-    if not os.path.exists(mysql_path):
-        print(f"Error: mysql.exe not found at: {mysql_path}")
-        return False
-    
-    save_config({'mysql_path': mysql_path})
-    print(f"✅ MySQL path saved: {mysql_path}")
-    return True
+def check_connector():
+    """Check if mysql-connector-python is installed"""
+    try:
+        import mysql.connector
+        return True
+    except ImportError:
+        print("mysql-connector-python not installed.")
+        print("Installing...")
+        os.system('pip install mysql-connector-python')
+        try:
+            import mysql.connector
+            return True
+        except ImportError:
+            print("Failed to install. Run: pip install mysql-connector-python")
+            return False
 
 
 def prompt_connection():
@@ -62,13 +48,14 @@ def prompt_connection():
     if not user:
         user = 'root'
     
+    import getpass
     password = getpass.getpass("Password: ")
     
     database = input("Database name: ").strip()
     
     SESSION_CONFIG = {
         'host': host,
-        'port': port,
+        'port': int(port),
         'user': user,
         'password': password,
         'database': database
@@ -79,77 +66,69 @@ def prompt_connection():
 
 
 def execute_query(sql_query):
-    """Execute SQL query and return results"""
-    config = load_config()
+    """Execute SQL query using mysql-connector"""
+    import mysql.connector
     
-    mysql_path = config.get('mysql_path')
-    if not mysql_path or not os.path.exists(mysql_path):
-        print("Error: mysql.exe not configured. Run setup first.")
-        return None
-    
-    if not config.get('user') or not config.get('database'):
+    if not SESSION_CONFIG:
         print("Error: Not connected. Run connect first.")
-        return None
-    
-    host = config.get('host', 'localhost')
-    user = config.get('user')
-    password = config.get('password', '')
-    database = config.get('database')
-    port = config.get('port', '3306')
-    
-    cmd = [mysql_path, f'-h{host}', f'-P{port}', f'-u{user}']
-    if password:
-        cmd.append(f'-p{password}')
-    cmd.extend(['--batch', '--raw', '-e', sql_query, database])
+        return None, None
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        conn = mysql.connector.connect(
+            host=SESSION_CONFIG['host'],
+            port=SESSION_CONFIG['port'],
+            user=SESSION_CONFIG['user'],
+            password=SESSION_CONFIG['password'],
+            database=SESSION_CONFIG['database']
+        )
         
-        if result.returncode != 0:
-            error = result.stderr.replace(password, '***') if password else result.stderr
-            print(f"MySQL Error: {error}")
-            return None
+        cursor = conn.cursor()
+        cursor.execute(sql_query)
         
-        return result.stdout
-    except subprocess.TimeoutExpired:
-        print("Error: Query timed out (30s)")
-        return None
+        # Get column names
+        columns = [desc[0] for desc in cursor.description] if cursor.description else []
+        
+        # Get data
+        data = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        return columns, data
+        
+    except mysql.connector.Error as e:
+        print(f"MySQL Error: {e}")
+        return None, None
     except Exception as e:
         print(f"Error: {e}")
-        return None
+        return None, None
 
 
-def format_table(raw_output):
-    """Format MySQL batch output as table"""
-    if not raw_output or not raw_output.strip():
-        return "No results"
-    
-    lines = raw_output.strip().split('\n')
-    if len(lines) < 1:
-        return "No results"
-    
-    header = lines[0].split('\t')
-    data = []
-    for line in lines[1:]:
-        if line.strip():
-            row = line.split('\t')
-            data.append(row)
+def format_table(columns, data):
+    """Format query results as table"""
+    if not columns:
+        return "Query executed successfully (no data)"
     
     if not data:
         return "No data rows"
     
-    col_widths = [len(h) for h in header]
-    for row in data:
+    # Convert all data to strings
+    str_data = [[str(cell) if cell is not None else 'NULL' for cell in row] for row in data]
+    
+    # Calculate column widths
+    col_widths = [len(col) for col in columns]
+    for row in str_data:
         for i, cell in enumerate(row):
             if i < len(col_widths):
-                col_widths[i] = max(col_widths[i], len(str(cell)))
+                col_widths[i] = max(col_widths[i], len(cell))
     
+    # Build table
     separator = '+' + '+'.join('-' * (w + 2) for w in col_widths) + '+'
-    header_row = '|' + '|'.join(f' {h:<{col_widths[i]}} ' for i, h in enumerate(header)) + '|'
+    header_row = '|' + '|'.join(f' {col:<{col_widths[i]}} ' for i, col in enumerate(columns)) + '|'
     
     table_lines = [separator, header_row, separator]
-    for row in data:
-        row_line = '|' + '|'.join(f' {str(row[i]) if i < len(row) else "":<{col_widths[i]}} ' for i in range(len(col_widths))) + '|'
+    for row in str_data:
+        row_line = '|' + '|'.join(f' {row[i]:<{col_widths[i]}} ' for i in range(len(col_widths))) + '|'
         table_lines.append(row_line)
     table_lines.append(separator)
     table_lines.append(f"({len(data)} rows)")
@@ -161,56 +140,68 @@ def run_query(sql_query):
     """Run query and display formatted table"""
     print(f"\n📝 Query: {sql_query}\n")
     
-    raw = execute_query(sql_query)
-    if raw is None:
+    columns, data = execute_query(sql_query)
+    if columns is None and data is None:
         return
     
-    table = format_table(raw)
+    table = format_table(columns, data)
     print(table)
 
 
 def show_config():
     """Show current configuration"""
-    config = load_config()
     print("\n📋 MySQL Config:")
-    print(f"  mysql_path: {config.get('mysql_path', '❌ Not set')}")
-    if SESSION_CONFIG:
-        print(f"  host: {SESSION_CONFIG.get('host', '-')}")
-        print(f"  user: {SESSION_CONFIG.get('user', '-')}")
-        print(f"  database: {SESSION_CONFIG.get('database', '-')}")
-        print(f"  port: {SESSION_CONFIG.get('port', '-')}")
-        print("  password: ********")
-    else:
-        print("  Session: Not connected (run connect first)")
+    print(f"  host: {SESSION_CONFIG.get('host', '❌ Not connected')}")
+    print(f"  port: {SESSION_CONFIG.get('port', '-')}")
+    print(f"  user: {SESSION_CONFIG.get('user', '-')}")
+    print(f"  database: {SESSION_CONFIG.get('database', '-')}")
+    print(f"  password: {'********' if SESSION_CONFIG.get('password') else '-'}")
 
 
 if __name__ == '__main__':
+    if not check_connector():
+        sys.exit(1)
+    
     if len(sys.argv) < 2:
         print('MySQL Query Tool')
         print('================')
         print('')
         print('Usage:')
-        print('  python mysql_query.py setup <path_to_mysql.exe>')
-        print('  python mysql_query.py connect')
+        print('  python mysql_query.py connect <host> <user> <password> <database> [port]')
         print('  python mysql_query.py query "SELECT * FROM table"')
         print('  python mysql_query.py config')
         print('')
         print('Examples:')
-        print('  python mysql_query.py setup "C:\\mysql\\bin\\mysql.exe"')
-        print('  python mysql_query.py connect')
+        print('  python mysql_query.py connect localhost root mypass mydb')
+        print('  python mysql_query.py connect 192.168.1.100 admin secret shopdb 3307')
         print('  python mysql_query.py query "SHOW TABLES"')
+        print('  python mysql_query.py query "SELECT * FROM users LIMIT 10"')
         sys.exit(1)
     
     mode = sys.argv[1]
     
-    if mode == 'setup':
-        if len(sys.argv) < 3:
-            print('Usage: python mysql_query.py setup <path_to_mysql.exe>')
+    if mode == 'connect':
+        if len(sys.argv) < 6:
+            print('Usage: python mysql_query.py connect <host> <user> <password> <database> [port]')
+            print('')
+            print('Examples:')
+            print('  python mysql_query.py connect localhost root mypass mydb')
+            print('  python mysql_query.py connect 192.168.1.100 admin secret shopdb 3307')
             sys.exit(1)
-        setup_mysql_path(sys.argv[2])
-    
-    elif mode == 'connect':
-        prompt_connection()
+        host = sys.argv[2]
+        user = sys.argv[3]
+        password = sys.argv[4]
+        database = sys.argv[5]
+        port = int(sys.argv[6]) if len(sys.argv) > 6 else 3306
+        
+        SESSION_CONFIG = {
+            'host': host,
+            'port': port,
+            'user': user,
+            'password': password,
+            'database': database
+        }
+        print(f"✅ Connected: {user}@{host}:{port}/{database}")
     
     elif mode == 'query':
         if len(sys.argv) < 3:
@@ -223,5 +214,5 @@ if __name__ == '__main__':
     
     else:
         print(f'Unknown mode: {mode}')
-        print('Use: setup, connect, query, or config')
+        print('Use: connect, query, or config')
         sys.exit(1)

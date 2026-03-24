@@ -8,6 +8,80 @@ import time
 import webbrowser
 
 
+def paginate_table(columns, rows, x, y, width, header_color, border, font_size, font, max_cell_length, page_height, rows_per_page=None, row_height=9):
+    """Paginate table across multiple pages. Returns list of (y_position, table_html) tuples."""
+    if not columns:
+        return []
+    
+    def truncate(val, max_len=max_cell_length):
+        s = str(val) if val is not None else ''
+        return s[:max_len] + '...' if len(s) > max_len else s
+    
+    header_style = f"background-color:{header_color};border:{border} solid #000;padding:3px;font-weight:bold;"
+    cell_style = f"border:{border} solid #000;padding:3px;"
+    
+    header_html = ''.join(f'<th style="{header_style}">{col}</th>' for col in columns)
+    
+    y_int = int(y.replace('mm', '')) if isinstance(y, str) else y
+    available_height = page_height - y_int - 8
+    
+    if rows_per_page:
+        max_rows_per_page = rows_per_page
+    else:
+        max_rows_per_page = int(available_height / row_height)
+    
+    if max_rows_per_page < 1:
+        max_rows_per_page = 1
+    
+    pages = []
+    for i in range(0, len(rows), max_rows_per_page):
+        page_rows = rows[i:i + max_rows_per_page]
+        
+        rows_html = ''
+        for row in page_rows:
+            cells = ''.join(f'<td style="{cell_style}">{truncate(cell)}</td>' for cell in row)
+            rows_html += f'<tr>{cells}</tr>'
+        
+        current_y = y_int if i == 0 else 12
+        
+        table_html = f'''<table style="position:absolute;left:{x};top:{current_y}mm;width:{width};border-collapse:collapse;font-family:{font};font-size:{font_size};">
+        <thead><tr>{header_html}</tr></thead>
+        <tbody>{rows_html}</tbody>
+        </table>'''
+        pages.append((current_y, table_html))
+    
+    return pages
+
+
+def create_table(data, x='20mm', y='20mm', width='170mm', header_color='lightcyan', border='1px', font_size='12px', font='Arial', max_cell_length=50):
+    """Create HTML table from data dict with columns and rows (single page)"""
+    columns = data.get('columns', [])
+    rows = data.get('rows', [])
+    
+    if not columns:
+        return ''
+    
+    def truncate(val, max_len=max_cell_length):
+        s = str(val) if val is not None else ''
+        return s[:max_len] + '...' if len(s) > max_len else s
+    
+    header_style = f"background-color:{header_color};border:{border} solid #000;padding:5px;font-weight:bold;"
+    cell_style = f"border:{border} solid #000;padding:5px;"
+    
+    header_html = ''.join(f'<th style="{header_style}">{col}</th>' for col in columns)
+    
+    rows_html = ''
+    for row in rows:
+        cells = ''.join(f'<td style="{cell_style}">{truncate(cell)}</td>' for cell in row)
+        rows_html += f'<tr>{cells}</tr>'
+    
+    table_html = f'''<table style="position:absolute;left:{x};top:{y};width:{width};border-collapse:collapse;font-family:{font};font-size:{font_size};">
+    <thead><tr>{header_html}</tr></thead>
+    <tbody>{rows_html}</tbody>
+    </table>'''
+    return table_html
+
+
 def create_svg_bar_graph(data, x='20mm', y='20mm', width='160mm', height='80mm', title='', colors=None):
     """Create SVG bar graph from data dict {label: value}"""
     if colors is None:
@@ -98,9 +172,8 @@ def create_svg_line_graph(data, x='20mm', y='20mm', width='160mm', height='80mm'
     return svg
 
 
-def create_page(page, page_num, total_pages, font, font_size, border):
+def create_page(page, page_num, total_pages, font, font_size, border, page_width='210mm', page_height='297mm', default_x='20mm'):
     """Create HTML for a single page"""
-    # Handle both dict (with 'items' key) and list formats
     if isinstance(page, dict):
         items = page.get('items', [])
     else:
@@ -108,7 +181,21 @@ def create_page(page, page_num, total_pages, font, font_size, border):
     
     items_html = ''
     for item in items:
-        if item.get('type') == 'bar_graph':
+        if item.get('type') == 'table':
+            items_html += create_table(
+                data=item.get('data', {}),
+                x=item.get('x', default_x),
+                y=item.get('y', '20mm'),
+                width=item.get('width', '170mm'),
+                header_color=item.get('header_color', 'lightcyan'),
+                border=item.get('border', '1px'),
+                font_size=item.get('font_size', '12px'),
+                font=item.get('font', font),
+                max_cell_length=item.get('max_cell_length', 50)
+            ) + '\n'
+        elif item.get('type') == 'table_paged':
+            items_html += item.get('html', '') + '\n'
+        elif item.get('type') == 'bar_graph':
             colors = item.get('colors', None)
             items_html += create_svg_bar_graph(
                 data=item.get('data', {}),
@@ -142,8 +229,10 @@ def create_page(page, page_num, total_pages, font, font_size, border):
             w = f'width:{item.get("w")};' if item.get('w') else ''
             items_html += f'<div style="position:absolute;left:{x};top:{y};font-family:{f};font-size:{fs};color:{color};{bold}{italic}{align}{w}">{text}</div>\n'
     
-    # Page number
-    items_html += f'<div style="position:absolute;left:95mm;top:290mm;font-family:{font};font-size:9px;color:#999;">หน้า {page_num}/{total_pages}</div>\n'
+    # Page number - adjust position based on orientation
+    page_num_x = '140mm' if page_width == '297mm' else '95mm'
+    page_num_y = '200mm' if page_width == '297mm' else '290mm'
+    items_html += f'<div style="position:absolute;left:{page_num_x};top:{page_num_y};font-family:{font};font-size:9px;color:#999;">หน้า {page_num}/{total_pages}</div>\n'
     
     # Border
     border_style = ''
@@ -162,7 +251,6 @@ def create_page(page, page_num, total_pages, font, font_size, border):
 
 def create_report(config, output_file=None):
     """Create multi-page report from config"""
-    # Default output folder
     reports_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'reports')
     if not os.path.exists(reports_dir):
         os.makedirs(reports_dir, exist_ok=True)
@@ -176,12 +264,79 @@ def create_report(config, output_file=None):
     font = config.get('font', 'Arial')
     font_size = config.get('font_size', '14px')
     border = config.get('border')
-    pages = config.get('pages', [config.get('items', [])])
+    orientation = config.get('orientation', 'portrait')
     
-    total_pages = len(pages)
+    if orientation == 'landscape':
+        page_width = '297mm'
+        page_height = '210mm'
+        page_size = 'A4 landscape'
+        default_x = '10mm'
+    else:
+        page_width = '210mm'
+        page_height = '297mm'
+        page_size = 'A4 portrait'
+        default_x = '20mm'
+    
+    pages_config = config.get('pages', [config.get('items', [])])
+    
+    all_pages_html = []
+    for page_config in pages_config:
+        if isinstance(page_config, dict):
+            items = page_config.get('items', [])
+        else:
+            items = page_config
+        
+        page_items = []
+        continuation_pages = []
+        for item in items:
+            if item.get('type') == 'table':
+                columns = item.get('data', {}).get('columns', [])
+                rows = item.get('data', {}).get('rows', [])
+                x = item.get('x', default_x)
+                y = item.get('y', '20mm')
+                width = item.get('width', '170mm' if orientation != 'landscape' else '277mm')
+                header_color = item.get('header_color', 'lightcyan')
+                border_width = item.get('border', '1px')
+                fs = item.get('font_size', '12px')
+                f = item.get('font', font)
+                max_len = item.get('max_cell_length', 50)
+                rows_per_page = item.get('rows_per_page')
+                
+                ph = int(page_height.replace('mm', ''))
+                
+                table_pages = paginate_table(columns, rows, x, y, width, header_color, border_width, fs, f, max_len, ph, rows_per_page)
+                
+                continuation_pages = []
+                for idx, (table_y, table_html) in enumerate(table_pages):
+                    if idx == 0:
+                        page_items.append({'type': 'table_paged', 'html': table_html, 'y': table_y})
+                    else:
+                        continuation_pages.append({'type': 'continuation', 'html': table_html, 'y': 15})
+            else:
+                page_items.append(item)
+        
+        all_pages_html.append({'items': page_items, 'title': config.get('title', '')})
+        all_pages_html.extend(continuation_pages)
+    
+    total_pages = len(all_pages_html)
     pages_html = ''
-    for i, page in enumerate(pages):
-        pages_html += create_page(page, i + 1, total_pages, font, font_size, border) + '\n'
+    for i, page in enumerate(all_pages_html):
+        if isinstance(page, dict) and page.get('type') == 'continuation':
+            items_html = page.get('html', '')
+            page_num_x = '140mm' if orientation == 'landscape' else '95mm'
+            page_num_y = '200mm' if orientation == 'landscape' else '290mm'
+            items_html += f'<div style="position:absolute;left:{page_num_x};top:{page_num_y};font-family:{font};font-size:9px;color:#999;">หน้า {i+1}/{total_pages}</div>\n'
+            border_style = ''
+            if border:
+                bw = border.get('width', '2px')
+                bc = border.get('color', '#000000')
+                bs = border.get('style', 'solid')
+                br = border.get('radius', '0')
+                bp = border.get('padding', '10mm')
+                border_style = f'border:{bw} {bs} {bc};border-radius:{br};padding:{bp};box-sizing:border-box;'
+            pages_html += f'<div class="page" style="{border_style}">\n{items_html}\n</div>\n'
+        else:
+            pages_html += create_page(page, i + 1, total_pages, font, font_size, border, page_width, page_height, default_x) + '\n'
     
     html = f'''<!DOCTYPE html>
 <html>
@@ -189,7 +344,7 @@ def create_report(config, output_file=None):
 <meta charset="utf-8">
 <title>{title}</title>
 <style>
-@page {{ size: A4 portrait; margin: 0; }}
+@page {{ size: {page_size}; margin: 0; }}
 body {{
     margin: 0;
     padding: 0;
@@ -198,8 +353,8 @@ body {{
     background: white;
 }}
 .page {{
-    width: 210mm;
-    height: 297mm;
+    width: {page_width};
+    height: {page_height};
     position: relative;
     background: white;
     page-break-after: always;

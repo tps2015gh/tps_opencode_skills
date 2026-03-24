@@ -67,6 +67,39 @@ start my_report.html
 | color | No | #000000 | Text color |
 | bold | No | false | Bold text |
 
+## Table Item
+
+Add a table to the report:
+
+```json
+{
+  "type": "table",
+  "x": "20mm",
+  "y": "50mm",
+  "width": "170mm",
+  "header_color": "lightcyan",
+  "border": "1px",
+  "data": {
+    "columns": ["ID", "Name", "Email"],
+    "rows": [
+      ["1", "John", "john@example.com"],
+      ["2", "Jane", "jane@example.com"]
+    ]
+  }
+}
+```
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| type | Yes | - | Set to "table" |
+| x | Yes | - | Horizontal position |
+| y | Yes | - | Vertical position |
+| width | No | 170mm | Table width |
+| header_color | No | lightcyan | Header background color |
+| border | No | 1px | Border width |
+| data.columns | Yes | - | Array of column names |
+| data.rows | Yes | - | Array of row data |
+
 ## Position Units
 
 | Unit | Example | Description |
@@ -101,3 +134,25 @@ start my_report.html
   ]
 }
 ```
+
+## Users Entity Template
+
+Generate report from MySQL users_entity table:
+
+```bash
+python .opencode/skills/html-report/generate_users.py [limit] [output]
+```
+
+Example:
+```bash
+python .opencode/skills/html-report/generate_users.py 50 users_report.html
+```
+
+Template saved at: `templates/users_entity.json`
+
+Settings:
+- A4 Landscape
+- Margin: 10mm
+- Border: 2px solid
+- 19 rows per page
+- lightcyan header

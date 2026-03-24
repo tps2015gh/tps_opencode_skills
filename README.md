@@ -23,6 +23,7 @@ AI-powered Telegram bridge with reusable skills for OpenCode.
 | Area | Work Done |
 |------|-----------|
 | **Report System** | Built html-report skill with multi-page support, SVG bar/line graphs, border frames |
+| **Facebook Converter** | Built html-to-facebook skill to convert HTML reports to Facebook posts with graph images |
 | **Queue Monitor** | Created inbox polling system with 2-min interval, auto-reply, status updates |
 | **Piano Skill** | Implemented piano note generation (C3-C6), WAV output, tempo control |
 | **Thai TTS** | Integrated Microsoft Edge TTS for Thai text-to-speech |

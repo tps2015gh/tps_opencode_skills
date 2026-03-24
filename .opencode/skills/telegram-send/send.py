@@ -101,11 +101,75 @@ def send_audio(chat_id: str, file_path: str, caption: str = '', reply_to: str = 
         return {'ok': False, 'error': str(e)}
 
 
+def send_document(chat_id: str, file_path: str, caption: str = '', reply_to: str = None) -> dict:
+    """Send document (PDF, DOC, etc.) to Telegram"""
+    load_env()
+    token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if not token:
+        return {'ok': False, 'error': 'TELEGRAM_BOT_TOKEN not set'}
+
+    if not os.path.exists(file_path):
+        return {'ok': False, 'error': f'File not found: {file_path}'}
+
+    caption = decode_text(caption)
+    url = f'https://api.telegram.org/bot{token}/sendDocument'
+    boundary = uuid.uuid4().hex
+
+    body = b''
+    # chat_id
+    body += f'--{boundary}\r\n'.encode()
+    body += b'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
+    body += f'{chat_id}\r\n'.encode()
+
+    # caption
+    if caption:
+        body += f'--{boundary}\r\n'.encode()
+        body += b'Content-Disposition: form-data; name="caption"\r\n\r\n'
+        body += f'{caption}\r\n'.encode()
+
+    # reply_to_message_id
+    if reply_to:
+        body += f'--{boundary}\r\n'.encode()
+        body += b'Content-Disposition: form-data; name="reply_to_message_id"\r\n\r\n'
+        body += f'{reply_to}\r\n'.encode()
+
+    # document file
+    filename = os.path.basename(file_path)
+    ext = os.path.splitext(filename)[1].lower()
+    content_types = {
+        '.pdf': 'application/pdf',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.xls': 'application/vnd.ms-excel',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.txt': 'text/plain',
+        '.zip': 'application/zip',
+    }
+    content_type = content_types.get(ext, 'application/octet-stream')
+
+    body += f'--{boundary}\r\n'.encode()
+    body += f'Content-Disposition: form-data; name="document"; filename="{filename}"\r\n'.encode()
+    body += f'Content-Type: {content_type}\r\n\r\n'.encode()
+    with open(file_path, 'rb') as f:
+        body += f.read()
+    body += b'\r\n'
+    body += f'--{boundary}--\r\n'.encode()
+
+    try:
+        req = urllib.request.Request(url, data=body)
+        req.add_header('Content-Type', f'multipart/form-data; boundary={boundary}')
+        resp = urllib.request.urlopen(req, timeout=60)
+        return json.loads(resp.read().decode())
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('Usage:')
-        print('  Text:  python send.py text <chat_id> <text> [reply_to_message_id]')
-        print('  Audio: python send.py audio <chat_id> <file.mp3> [caption] [reply_to_message_id]')
+        print('  Text:     python send.py text <chat_id> <text> [reply_to_message_id]')
+        print('  Audio:    python send.py audio <chat_id> <file.mp3> [caption] [reply_to_message_id]')
+        print('  Document: python send.py document <chat_id> <file.pdf> [caption] [reply_to_message_id]')
         sys.exit(1)
 
     mode = sys.argv[1]
@@ -129,9 +193,19 @@ if __name__ == '__main__':
         reply_to = sys.argv[5] if len(sys.argv) > 5 else None
         result = send_audio(chat_id, file_path, caption, reply_to)
 
+    elif mode == 'document':
+        if len(sys.argv) < 4:
+            print('Usage: python send.py document <chat_id> <file.pdf> [caption] [reply_to_message_id]')
+            sys.exit(1)
+        chat_id = sys.argv[2]
+        file_path = sys.argv[3]
+        caption = sys.argv[4] if len(sys.argv) > 4 else ''
+        reply_to = sys.argv[5] if len(sys.argv) > 5 else None
+        result = send_document(chat_id, file_path, caption, reply_to)
+
     else:
         print(f'Unknown mode: {mode}')
-        print('Use "text" or "audio"')
+        print('Use "text", "audio", or "document"')
         sys.exit(1)
 
     try:

@@ -1,11 +1,11 @@
 ---
 name: telegram-send
-description: Send text messages and MP3 audio to Telegram chat using Bot API.
+description: Send text messages, MP3 audio, and documents to Telegram chat using Bot API.
 ---
 
 ## Telegram Send Skill
 
-Send text messages and audio files to any Telegram chat via Bot API.
+Send text messages, audio files, and documents to any Telegram chat via Bot API.
 
 ## Prerequisites
 
@@ -23,6 +23,12 @@ python .opencode/skills/telegram-send/send.py text <chat_id> <text> [reply_to_me
 
 ```bash
 python .opencode/skills/telegram-send/send.py audio <chat_id> <file.mp3> [caption] [reply_to_message_id]
+```
+
+### Send Document (PDF, DOC, XLS, ZIP)
+
+```bash
+python .opencode/skills/telegram-send/send.py document <chat_id> <file.pdf> [caption] [reply_to_message_id]
 ```
 
 ## Parameters
@@ -44,6 +50,17 @@ python .opencode/skills/telegram-send/send.py audio <chat_id> <file.mp3> [captio
 | caption | No | Text caption for the audio |
 | reply_to_message_id | No | Original message ID to reply to |
 
+### Document Mode
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| chat_id | Yes | Telegram chat ID |
+| file.pdf | Yes | Path to document file |
+| caption | No | Text caption for the document |
+| reply_to_message_id | No | Original message ID to reply to |
+
+Supported formats: PDF, DOC, DOCX, XLS, XLSX, TXT, ZIP
+
 ## Examples
 
 ```bash
@@ -52,6 +69,9 @@ python .opencode/skills/telegram-send/send.py text 7815216214 "Hello!" 2272
 
 # Send audio reply
 python .opencode/skills/telegram-send/send.py audio 7815216214 output.mp3 "Here is your news" 2276
+
+# Send PDF document
+python .opencode/skills/telegram-send/send.py document 7815216214 report.pdf "Monthly report" 2280
 ```
 
 ## Python Usage
@@ -59,13 +79,16 @@ python .opencode/skills/telegram-send/send.py audio 7815216214 output.mp3 "Here 
 ```python
 import sys
 sys.path.insert(0, '.opencode/skills/telegram-send')
-from send import send_message, send_audio
+from send import send_message, send_audio, send_document
 
 # Send text
 result = send_message('7815216214', 'Hello!', '2272')
 
 # Send audio
 result = send_audio('7815216214', 'output.mp3', 'Your reply', '2276')
+
+# Send PDF
+result = send_document('7815216214', 'report.pdf', 'Monthly report', '2280')
 ```
 
 ## Notes
@@ -73,3 +96,4 @@ result = send_audio('7815216214', 'output.mp3', 'Your reply', '2276')
 - **No emojis** in text - causes encoding errors on Windows
 - Token is loaded from `.env` file automatically
 - Returns JSON with `ok: true` on success
+- Document upload timeout is 60 seconds (larger files)

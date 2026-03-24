@@ -43,15 +43,16 @@ def send_to_telegram(pdf_path, chat_id, reply_to=None):
         print(f"Error: PDF not found: {pdf_path}")
         return False
     
-    # Use telegram-send to send document
-    cmd = ['python', send_script, 'document', chat_id, pdf_path]
+    # Use telegram-send document mode to send PDF
+    filename = os.path.basename(pdf_path)
+    cmd = ['python', send_script, 'document', chat_id, pdf_path, filename]
     if reply_to:
         cmd.append(str(reply_to))
     
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode == 0:
-            print(f"✅ Sent: {os.path.basename(pdf_path)}")
+            print(f"✅ Sent: {filename}")
             return True
         else:
             print(f"❌ Error: {result.stderr}")

@@ -13,7 +13,7 @@ import aiohttp
 from telegram import Update, BotCommand
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
-    filters, ContextTypes, AIRequestHandler, Defaults
+    filters, ContextTypes
 )
 
 # ─── Configuration from Environment Variables ───────────────────────────────────

@@ -12,6 +12,23 @@ import json
 import logging
 import asyncio
 from datetime import datetime
+
+# ─── Load .env file ────────────────────────────────────────────────────────────
+def load_env():
+    env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    if os.path.exists(env_file):
+        with open(env_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and '=' in line and not line.startswith('#'):
+                    key, _, value = line.partition('=')
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if key and not os.getenv(key):
+                        os.environ[key] = value
+
+load_env()
+
 from telegram import Update, BotCommand
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
@@ -22,6 +39,7 @@ from telegram.ext import (
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 BRIDGE_DIR = os.getenv('TELEGRAM_BRIDGE_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bridge_data'))
 INBOX_FILE = os.path.join(BRIDGE_DIR, 'inbox.json')
+OUTBOX_FILE = os.path.join(BRIDGE_DIR, 'outbox.json')
 
 os.makedirs(BRIDGE_DIR, exist_ok=True)
 
@@ -82,7 +100,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     inbox_count = 0
-    outbox_count = 0
     
     if os.path.exists(INBOX_FILE):
         try:
@@ -92,12 +109,24 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
     
-    await update.message.reply_text(
+    status_text = (
         f"Status:\n\n"
         f"Inbox (pending): {inbox_count}\n"
-        f"Bridge Dir: `{BRIDGE_DIR}`",
-        parse_mode="Markdown"
+        f"Bridge Dir: `{BRIDGE_DIR}`"
     )
+    
+    await update.message.reply_text(status_text, parse_mode="Markdown")
+    
+    # Write status to file for OpenCode to read
+    try:
+        with open(os.path.join(BRIDGE_DIR, 'status_request.json'), 'w', encoding='utf-8') as f:
+            json.dump({
+                'timestamp': datetime.now().isoformat(),
+                'inbox_count': inbox_count,
+                'requested_by': update.effective_user.username or 'unknown'
+            }, f, ensure_ascii=False, indent=2)
+    except:
+        pass
 
 async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     messages = []
@@ -457,10 +486,62 @@ def get_auto_response(text: str) -> str:
     
     return None
 
-# ─── Auto-Inbox Processor ───────────────────────────────────────────────────
-async def inbox_processor(app):
-    """No longer needed - queue_processor handles everything"""
-    pass
+# ─── Auto-Outbox Processor ─────────────────────────────────────────────────
+async def outbox_processor(bot):
+    """Watch outbox.json and send replies to Telegram automatically"""
+    print("[OUTBOX] Processor started - watching for replies...")
+    last_count = 0
+    while True:
+        try:
+            if os.path.exists(OUTBOX_FILE):
+                try:
+                    with open(OUTBOX_FILE, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        outbox = json.loads(content) if content else []
+                except (json.JSONDecodeError, IOError):
+                    outbox = []
+
+                pending = [m for m in outbox if not m.get('_sent', False)]
+
+                if pending:
+                    for msg in pending:
+                        chat_id = msg.get('chat_id')
+                        text = msg.get('text', '')
+                        reply_to = msg.get('reply_to_message_id')
+
+                        if chat_id and text:
+                            try:
+                                kwargs = {'chat_id': chat_id, 'text': text}
+                                if reply_to:
+                                    kwargs['reply_to_message_id'] = reply_to
+                                await bot.send_message(**kwargs)
+                                msg['_sent'] = True
+                                print(f"[OUTBOX] Sent reply to {chat_id}: {text[:50]}...")
+                            except Exception as e:
+                                print(f"[OUTBOX] Send failed: {e}")
+
+                    # Save updated outbox
+                    try:
+                        with open(OUTBOX_FILE, 'w', encoding='utf-8') as f:
+                            json.dump(outbox, f, ensure_ascii=False, indent=2)
+                    except Exception as e:
+                        print(f"[OUTBOX] Save error: {e}")
+
+                    # Clean up fully sent messages
+                    unsent = [m for m in outbox if not m.get('_sent', False)]
+                    if not unsent:
+                        try:
+                            with open(OUTBOX_FILE, 'w', encoding='utf-8') as f:
+                                json.dump([], f)
+                        except:
+                            pass
+        except asyncio.CancelledError:
+            print("[OUTBOX] Processor stopped")
+            break
+        except Exception as e:
+            print(f"[OUTBOX] Error: {e}")
+
+        await asyncio.sleep(2)
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 def main():
@@ -510,6 +591,9 @@ def main():
         await application.start()
         await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
         
+        # Start outbox processor alongside the bot
+        outbox_task = asyncio.create_task(outbox_processor(application.bot))
+        
         print("Bot running. Press Ctrl+C to stop...")
         
         try:
@@ -518,6 +602,11 @@ def main():
         except KeyboardInterrupt:
             print("\n[SHUTDOWN] Stopping...")
         finally:
+            outbox_task.cancel()
+            try:
+                await outbox_task
+            except asyncio.CancelledError:
+                pass
             await application.updater.stop()
             await application.stop()
             await application.shutdown()

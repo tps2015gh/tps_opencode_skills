@@ -43,6 +43,7 @@ AI-powered Telegram bridge with reusable skills for OpenCode.
 | play-audio | `play_audio.py` | Play audio files |
 | piano | `piano.py` | Play piano notes, generate WAV |
 | html-report | `report.py` | Create A4 portrait HTML reports |
+| html-to-facebook | `convert.py` | Convert HTML reports to Facebook posts |
 
 ## Quick Install to Other Project
 
@@ -69,6 +70,7 @@ copy .env C:\your_project\.env
     play-audio/       play audio
     piano/            play piano notes
     html-report/      create A4 HTML reports
+    html-to-facebook/ convert HTML to Facebook posts
   commands/
     telegram.md       /telegram command
 .env                  TELEGRAM_BOT_TOKEN
@@ -88,6 +90,7 @@ reports/              generated HTML reports (gitignored)
 | play-audio | [.opencode/skills/play-audio/SKILL.md](.opencode/skills/play-audio/SKILL.md) |
 | piano | [.opencode/skills/piano/SKILL.md](.opencode/skills/piano/SKILL.md) |
 | html-report | [.opencode/skills/html-report/SKILL.md](.opencode/skills/html-report/SKILL.md) |
+| html-to-facebook | [.opencode/skills/html-to-facebook/SKILL.md](.opencode/skills/html-to-facebook/SKILL.md) |
 
 ## How It Works
 

@@ -7,6 +7,10 @@
 bridge_data/
 *.json
 
+# Report output (generated HTML reports)
+reports/
+*.html
+
 # Python
 __pycache__/
 *.py[cod]
@@ -25,9 +29,11 @@ desktop.ini
 # Logs
 *.log
 
-# Audio files
+# Audio/Video files
 *.mp3
 *.wav
+*.md3
+*.mp4
 
 # Temporary files
 tmp/

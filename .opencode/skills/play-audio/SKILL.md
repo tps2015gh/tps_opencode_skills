@@ -29,7 +29,7 @@ pip install pygame
 ## Direct Python Usage
 
 ```bash
-python play_audio.py <audio_file>
+python .opencode/skills/play-audio/play_audio.py <audio_file>
 ```
 
 ## Supported Formats

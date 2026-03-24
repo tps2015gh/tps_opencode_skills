@@ -26,12 +26,18 @@ def load_env():
                         os.environ[key] = value
 
 
+def decode_text(text: str) -> str:
+    """Convert literal \\n to real newlines"""
+    return text.replace('\\n', '\n').replace('\\t', '\t')
+
+
 def send_message(chat_id: str, text: str, reply_to: str = None) -> dict:
     load_env()
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     if not token:
         return {'ok': False, 'error': 'TELEGRAM_BOT_TOKEN not set'}
 
+    text = decode_text(text)
     url = f'https://api.telegram.org/bot{token}/sendMessage'
     data = {'chat_id': str(chat_id), 'text': text}
     if reply_to:
@@ -54,6 +60,7 @@ def send_audio(chat_id: str, file_path: str, caption: str = '', reply_to: str = 
     if not os.path.exists(file_path):
         return {'ok': False, 'error': f'File not found: {file_path}'}
 
+    caption = decode_text(caption)
     url = f'https://api.telegram.org/bot{token}/sendAudio'
     boundary = uuid.uuid4().hex
 

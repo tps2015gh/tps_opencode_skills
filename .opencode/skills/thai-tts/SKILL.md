@@ -38,12 +38,12 @@ pip install edge-tts pygame
 ## Direct Python Usage
 
 ```bash
-python thai-tts-v2/thai_edge_tts.py <file> [voice] [rate] [volume]
+python .opencode/skills/thai-tts/thai_tts.py <file> [voice] [rate] [volume]
 ```
 
 ### Example
 ```bash
-python thai-tts-v2/thai_edge_tts.py ai_news.txt female +0% +0%
+python .opencode/skills/thai-tts/thai_tts.py ai_news.txt female +0% +0%
 ```
 
 ## Thai Voices

@@ -1,38 +1,35 @@
-# TPS OpenCode Skills
+### New Skill: Thai OCR Lite (Tesseract-based)
 
-AI-powered Telegram bridge with reusable skills for OpenCode.
+This skill provides a robust Thai OCR solution for environments where standard libraries like EasyOCR cannot be used (e.g., 32-bit Python on Windows). It leverages the Tesseract OCR engine for local, token-free processing.
 
-## Agent
+#### Purpose
+To enable OCR processing of Thai text from scanned PDF documents, especially in constrained 32-bit environments.
 
-| Field | Value |
-|-------|-------|
-| Model | MiMo V2 Pro Free (OpenCode) |
-| Role | AI Developer & Assistant |
-| Capabilities | Code development, skill creation, queue processing, web search, report generation |
+#### Prerequisites
+1.  <strong>Tesseract-OCR (32-bit) Installation:</strong>
+    <ul>
+        <li>Download: <a href="https://digi.bib.uni-mannheim.de/tesseract/tesseract-ocr-w32-setup-5.3.1.20230401.exe">Tesseract-OCR 32-bit Installer</a></li>
+        <li>During installation, ensure "Thai" language data is selected.</li>
+        <li>Add the Tesseract installation directory (e.g., <code>C:\Program Files (x86)\Tesseract-OCR</code>) to your System PATH environment variable.</li>
+    </ul>
 
-## Development Team
+#### Dependencies
+- `pytesseract`
+- `pymupdf`
+- `pillow`
 
-| Role | Name | Description |
-|------|------|-------------|
-| Director Supervisor | @p400 | Project owner, strategy, and direction |
-| AI Developer | **MiMo V2 Pro Free (OpenCode)** | Full-stack development, skill creation, system architecture |
-| Human Debugger | @p400 | Testing, deadlock detection |
+#### Usage
+```bash
+python .opencode/skills/thai-ocr-lite/extract_lite.py <pdf_file> [output_file]
+```
 
-### MiMo V2 Pro Free - Development Contributions
+#### Performance (Speed Considerations)
+Tesseract OCR's speed is generally dependent on the CPU, the complexity of the document (number of pages, image resolution, text density), and the quality of the scan. While it is highly efficient for local, token-free processing, it may not always be as instantaneous as native PDF text extraction (which is only possible for non-scanned PDFs). Compared to cloud-based AI Vision solutions, Tesseract offers significant cost savings (zero tokens) but might require more processing time for very large or complex documents. It is well-suited for batch processing and scenarios where token costs are a primary concern.
 
-| Area | Work Done |
-|------|-----------|
-| **Report System** | Built html-report skill with multi-page support, SVG bar/line graphs, border frames |
-| **Facebook Converter** | Built html-to-facebook skill to convert HTML reports to Facebook posts with graph images |
-| **PDF to Telegram** | Built pdf-to-telegram skill to list PDFs and send selected to Telegram |
-| **MySQL Query** | Built mysql-query skill with session-only credentials, formatted table output |
-| **Queue Monitor** | Created inbox polling system with 2-min interval, auto-reply, status updates |
-| **Piano Skill** | Implemented piano note generation (C3-C6), WAV output, tempo control |
-| **Thai TTS** | Integrated Microsoft Edge TTS for Thai text-to-speech |
-| **Telegram Bridge** | Enhanced telegram-send with reply_to_message support |
-| **Web Search** | Integrated news search and data extraction for reports |
-| **Documentation** | Wrote SKILL.md files for all skills |
-| **Bug Fixes** | Fixed multi-page iteration, border rendering, graph positioning |
+#### Project Integration
+The skill is located at `.opencode/skills/thai-ocr-lite/`.
+
+---
 
 ## Skills
 
@@ -49,57 +46,7 @@ AI-powered Telegram bridge with reusable skills for OpenCode.
 | html-to-facebook | `convert.py` | Convert HTML reports to Facebook posts |
 | pdf-to-telegram | `pdf_send.py` | List PDFs and send selected to Telegram |
 | mysql-query | `mysql_query.py` | Execute MySQL queries and display as table |
-
-## Quick Install to Other Project
-
-```powershell
-install.bat C:\your_project
-```
-
-Or manually:
-```powershell
-xcopy /E /I .opencode C:\your_project\.opencode
-copy .env C:\your_project\.env
-```
-
-## Project Structure
-
-```
-.opencode/
-  skills/
-    telegram-send/    send messages to Telegram
-    queue-check/      check inbox queue
-    queue-notify/     background queue monitor
-    file-list/        list files
-    thai-tts/         text-to-speech
-    play-audio/       play audio
-    piano/            play piano notes
-    html-report/      create A4 HTML reports
-    html-to-facebook/ convert HTML to Facebook posts
-    pdf-to-telegram/  list PDFs and send to Telegram
-    mysql-query/      execute MySQL queries and display as table
-  commands/
-    telegram.md       /telegram command
-.env                  TELEGRAM_BOT_TOKEN
-install.bat           install to other project
-reports/              generated HTML reports (gitignored)
-```
-
-## Skill Docs
-
-| Skill | File |
-|-------|------|
-| telegram-send | [.opencode/skills/telegram-send/SKILL.md](.opencode/skills/telegram-send/SKILL.md) |
-| queue-check | [.opencode/skills/queue-check/SKILL.md](.opencode/skills/queue-check/SKILL.md) |
-| queue-notify | [.opencode/skills/queue-notify/SKILL.md](.opencode/skills/queue-notify/SKILL.md) |
-| file-list | [.opencode/skills/file-list/SKILL.md](.opencode/skills/file-list/SKILL.md) |
-| thai-tts | [.opencode/skills/thai-tts/SKILL.md](.opencode/skills/thai-tts/SKILL.md) |
-| play-audio | [.opencode/skills/play-audio/SKILL.md](.opencode/skills/play-audio/SKILL.md) |
-| piano | [.opencode/skills/piano/SKILL.md](.opencode/skills/piano/SKILL.md) |
-| html-report | [.opencode/skills/html-report/SKILL.md](.opencode/skills/html-report/SKILL.md) |
-| html-to-facebook | [.opencode/skills/html-to-facebook/SKILL.md](.opencode/skills/html-to-facebook/SKILL.md) |
-| pdf-to-telegram | [.opencode/skills/pdf-to-telegram/SKILL.md](.opencode/skills/pdf-to-telegram/SKILL.md) |
-| mysql-query | [.opencode/skills/mysql-query/SKILL.md](.opencode/skills/mysql-query/SKILL.md) |
+| <strong>thai-ocr-lite</strong> | <code>extract_lite.py</code> | <strong>Thai OCR using Tesseract (for 32-bit systems)</strong> |
 
 ## How It Works
 
@@ -114,3 +61,4 @@ Telegram user sends message
 ## See Also
 
 - [Restructuring Guide](RESTRUCTURING.md)
+- [Thai OCR Lite Skill Documentation](.opencode/skills/thai-ocr-lite/SKILL.md)

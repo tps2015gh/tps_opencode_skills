@@ -6,11 +6,11 @@ This skill provides a robust Thai OCR solution for environments where standard l
 To enable OCR processing of Thai text from scanned PDF documents, especially in constrained 32-bit environments.
 
 #### Prerequisites
-1.  <strong>Tesseract-OCR (32-bit) Installation:</strong>
+1.  <strong>Tesseract-OCR Installation:</strong>
     <ul>
-        <li>Download: <a href="https://digi.bib.uni-mannheim.de/tesseract/tesseract-ocr-w32-setup-5.3.1.20230401.exe">Tesseract-OCR 32-bit Installer</a></li>
+        <li>Download from the official UB Mannheim GitHub Wiki: <a href="https://github.com/UB-Mannheim/tesseract/wiki">Tesseract at UB Mannheim (GitHub Wiki)</a></li>
         <li>During installation, ensure "Thai" language data is selected.</li>
-        <li>Add the Tesseract installation directory (e.g., <code>C:\Program Files (x86)\Tesseract-OCR</code>) to your System PATH environment variable.</li>
+        <li>Add Tesseract's installation directory (e.g., <code>C:\Program Files (x86)\Tesseract-OCR</code> for 32-bit, or <code>C:\Program Files\Tesseract-OCR</code> for 64-bit) to your System PATH environment variable.</li>
     </ul>
 
 #### Dependencies

@@ -9,11 +9,13 @@ A lightweight Thai OCR skill designed to work on 32-bit Python environments. Use
 
 ## Prerequisites
 
-1.  <strong>Tesseract-OCR Installation (32-bit):</strong>
+1.  <strong>Tesseract-OCR Installation:</strong>
     <ul>
-        <li>Download: <a href="https://digi.bib.uni-mannheim.de/tesseract/tesseract-ocr-w32-setup-5.3.1.20230401.exe">Tesseract-OCR 32-bit Installer</a></li>
+        <li><strong>Primary Recommended Source:</strong> Download the appropriate installer (32-bit or 64-bit) from the official UB Mannheim releases on GitHub: <a href="https://github.com/UB-Mannheim/tesseract/wiki">Tesseract at UB Mannheim (GitHub Wiki)</a>. This is the most reliable place to find the latest builds and versions.</li>
+        <li><em>(Alternative Download) For version 5.5.0 64-bit:</em> You can also use this direct link: <a href="https://sourceforge.net/projects/tesseract-ocr.mirror/files/5.5.0/tesseract-ocr-w64-setup-5.5.0.20241111.exe/download">Tesseract OCR 64-bit (v5.5.0) from SourceForge</a>.</li>
+        <li>If you wish to verify your specific download source, you can check your browser's download history (e.g., Chrome history).</li>
         <li>During installation, ensure "Thai" language data is selected.</li>
-        <li>Add Tesseract's installation directory (e.g., <code>C:\Program Files (x86)\Tesseract-OCR</code>) to your System PATH environment variable.</li>
+        <li>Add Tesseract's installation directory (e.g., <code>C:\Program Files (x86)\Tesseract-OCR</code> for 32-bit, or <code>C:\Program Files\Tesseract-OCR</code> for 64-bit) to your System PATH environment variable.</li>
     </ul>
 
 2.  <strong>Python Dependencies:</strong>

@@ -46,7 +46,7 @@ The skill is located at `.opencode/skills/thai-ocr-lite/`.
 | html-to-facebook | `convert.py` | Convert HTML reports to Facebook posts |
 | pdf-to-telegram | `pdf_send.py` | List PDFs and send selected to Telegram |
 | mysql-query | `mysql_query.py` | Execute MySQL queries and display as table |
-| <strong>thai-ocr-lite</strong> | <code>extract_lite.py</code> | <strong>Thai OCR using Tesseract (for 32-bit systems)</strong> |
+| **thai-ocr-lite** | `extract_lite.py` | **Thai OCR using Tesseract (for 32-bit systems)** |
 
 ## How It Works
 
